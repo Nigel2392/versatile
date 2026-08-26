@@ -1,0 +1,8 @@
+github.com/Nigel2392/errors v1.0.1 h1:LDhL6OM5iXRehi/nhDp6xmuwtlAqXE6+Z8MiyP8VxYo=
+github.com/Nigel2392/errors v1.0.1/go.mod h1:AV6mIkaeDgEi9vJKMpG9/6ni4fRnSnrqcfXWwjKbGHE=
+github.com/Nigel2392/goldcrest v1.0.4 h1:Xx+QLht6QjJ3Gg9uksgc6Ye1XjbtzQ1208ClZwoVWsg=
+github.com/Nigel2392/goldcrest v1.0.4/go.mod h1:UpnPrYJqZY/b7TkoVKdoNNPKTlQtld+fsrZEA98c1c0=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+golang.org/x/exp v0.0.0-20260824195058-e88cd73687aa h1:QSyA8ishJCyT21kER9KwNt0b7BM3iRK4x9QXhjN5Fdk=
+golang.org/x/exp v0.0.0-20260824195058-e88cd73687aa/go.mod h1:zeBbvyFKDaLwa7CH/zI8KXt7gTl14SF7sO08Pl5jBCM=
