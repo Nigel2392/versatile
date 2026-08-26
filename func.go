@@ -328,7 +328,7 @@ func Method[T Function](obj interface{}, nameOrNames any, opts ...func(*FuncConf
 	}
 
 	var (
-		orig = reflect.ValueOf(obj)
+		orig = ReflectValue(obj)
 		name string
 		m    reflect.Value
 	)
