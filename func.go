@@ -225,9 +225,19 @@ func WithFuncArgs(args ...any) func(*FuncConfig) {
 		case reflect.Value:
 			rv = a
 			rt = a.Type()
+			if a.Kind() == reflect.Pointer && rt.Elem().Kind() == reflect.Interface {
+				a = a.Elem()
+				rt = rt.Elem()
+			}
+
+		case *reflect.Value:
+			rv = a.Elem()
+			rt = a.Type().Elem()
+
 		case Argument:
 			rv = ReflectValue(a.Arg())
 			rt = a.Type()
+
 		default:
 			rv = reflect.ValueOf(arg)
 			rt = rv.Type()
