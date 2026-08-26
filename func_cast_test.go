@@ -955,7 +955,7 @@ func TestCast_SaveMethodsVariations(t *testing.T) {
 
 	t.Run("func(ctx context.Context) (..., error) 0 val", func(t *testing.T) {
 		m := &Model3{}
-		saveFn, err := versatile.Method[func()](m, "Save", versatile.WithContext(ctx))
+		saveFn, err := versatile.Method[func()](m, []string{"SaveA", "Save"}, versatile.WithContext(ctx))
 		mustNoErr(t, err)
 		saveFn()
 	})

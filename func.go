@@ -312,21 +312,44 @@ func CastFunc[OUT Function](fn any, opts ...func(*FuncConfig)) (OUT, error) {
 	return rVal.Interface().(OUT), nil
 }
 
-func Method[T Function](obj interface{}, name string, opts ...func(*FuncConfig)) (n T, err error) {
+func Method[T Function](obj interface{}, nameOrNames any, opts ...func(*FuncConfig)) (n T, err error) {
 	if obj == nil {
 		return n, ErrNilObject
 	}
 
+	var names []string
+	switch n := nameOrNames.(type) {
+	case []string:
+		names = n
+	case string:
+		names = []string{n}
+	default:
+		panic("nameOrNames must be `string` or `[]string`")
+	}
+
 	var (
-		v = reflect.ValueOf(obj)
-		m = v.MethodByName(name)
+		orig = reflect.ValueOf(obj)
+		name string
+		m    reflect.Value
 	)
-checkValid:
-	if !m.IsValid() {
+
+	for _, funcName := range names {
+		v := orig
+
+	checkvalid:
+		m = v.MethodByName(funcName)
+		if m.IsValid() {
+			name = funcName
+			break
+		}
+
 		if v.Kind() == reflect.Ptr {
 			v = v.Elem()
-			goto checkValid
+			goto checkvalid
 		}
+	}
+
+	if !m.IsValid() {
 		return n, ErrMethodNotFound
 	}
 
