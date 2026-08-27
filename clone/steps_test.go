@@ -3,6 +3,7 @@ package clone
 import (
 	"fmt"
 	"reflect"
+	"runtime/debug"
 	"testing"
 )
 
@@ -38,7 +39,16 @@ func newBaseStepPtrTest[T any](expect T, src T) baseStepTest {
 	}
 }
 
-var baseStepTests = []baseStepTest{
+func newSliceStepTest[T any](src []T) baseStepTest {
+	var zero = make([]T, 0)
+	return baseStepTest{
+		expected: src,
+		dst:      reflect.ValueOf(&zero),
+		src:      reflect.ValueOf(src),
+	}
+}
+
+var stepTests = []baseStepTest{
 	newBaseStepTest(55, int(55)),
 	newBaseStepTest(55, int8(55)),
 	newBaseStepTest(55, int16(55)),
@@ -74,10 +84,117 @@ var baseStepTests = []baseStepTest{
 
 	newBaseStepPtrTest("my string", "my string"),
 	newBaseStepPtrTest(true, true),
+
+	newSliceStepTest([]int{1, 2, 3, 4}),
+	newSliceStepTest([]float64{1, 2, 3, 4}),
+	newSliceStepTest([]any{1, 2, 3, 4}),
 }
 
-func TestBaseStep(t *testing.T) {
-	for _, test := range baseStepTests {
+type myFace interface{ StructMethod() string }
+
+type myStruct struct{ val string }
+
+func (m myStruct) StructMethod() string { return m.val }
+
+func TestSteps(t *testing.T) {
+
+	t.Run("TestPointerCloneFunc", func(t *testing.T) {
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Exception while executing tests: %v", r)
+			}
+		}()
+
+		var i = new(int)
+		var s = 55
+		if err := Copy(t.Context(), &i, &s); err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+
+		if *i != s {
+			t.Errorf("expected 'i' to be %d, got %d", s, i)
+		} else {
+			t.Logf("i == %d: %d", *i, s)
+		}
+
+		s = 5
+
+		t.Log(*i, s)
+	})
+
+	t.Run("TestInterfaceAssignable", func(t *testing.T) {
+
+		var testFunc = (func(fn func(t *testing.T)) func(t *testing.T) {
+			return func(t *testing.T) {
+				t.Helper()
+				defer func() {
+					if r := recover(); r != nil {
+						t.Errorf("Exception while executing tests: %v: %s", r, string(debug.Stack()))
+					}
+				}()
+
+				fn(t)
+			}
+		})
+
+		t.Run("IfacePointer", testFunc(func(t *testing.T) {
+			var i = new(any)
+			var s = 55
+			if err := Copy(t.Context(), i, s); err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+
+			if *i != s {
+				t.Errorf("expected 'i' to be %d, got %d", s, i)
+			} else {
+				t.Logf("i == %d: %d", *i, s)
+			}
+
+			s = 5
+
+			t.Log(*i, s)
+
+		}))
+
+		t.Run("IfaceWithMethodPointer", testFunc(func(t *testing.T) {
+			var i = new(myFace)
+			var s = &myStruct{"hello world"}
+			if err := Copy(t.Context(), i, s); err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+
+			if (*i).StructMethod() != s.val {
+				t.Errorf("expected 'i' to be %q, got %q", s.val, (*i).StructMethod())
+			} else {
+				t.Logf("i == %+v: %+v", *i, s)
+			}
+
+			t.Log(*i, s)
+
+		}))
+
+		t.Run("IfaceSlice", testFunc(func(t *testing.T) {
+			var i = new(any)
+			var s = 55
+			if err := Copy(t.Context(), i, s); err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+
+			if *i != s {
+				t.Errorf("expected 'i' to be %d, got %d", s, *i)
+			} else {
+				t.Logf("i == %d: %d", *i, s)
+			}
+
+			s = 5
+
+			t.Log(*i, s)
+		}))
+
+	})
+
+	for _, test := range stepTests {
 		t.Run(fmt.Sprintf("TestBaseStep-%T", test.src.Interface()), func(t *testing.T) {
 			err := rcopy(t.Context(), test.dst, test.src, []func(*State){})
 			if err != nil {
@@ -98,7 +215,7 @@ func TestBaseStep(t *testing.T) {
 				return
 			}
 
-			t.Logf("dst == src: %T(%v) == %T(%v)",
+			t.Logf("dst == src:\n\t%T(%v) == %T(%v)",
 				reflect.Indirect(reflect.ValueOf(dst)).Interface(),
 				reflect.Indirect(reflect.ValueOf(dst)).Interface(),
 				reflect.Indirect(reflect.ValueOf(test.expected)).Interface(),

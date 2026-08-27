@@ -1,44 +1,89 @@
 package clone
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+)
 
 type stepRegistry struct {
-	byType map[reflect.Type]Step
-	// byKind map[reflect.Kind]func() Step
-	byKind map[reflect.Kind]Step
+	steps map[any]Step
 }
 
 var stepReg = new(stepRegistry{
-	byType: make(map[reflect.Type]Step),
-	// byKind: make(map[reflect.Kind]func() Step),
-	byKind: make(map[reflect.Kind]Step),
+	steps: make(map[any]Step),
 })
 
-func AddStepType(typ reflect.Type, step Step) {
-	if typ.Kind() == reflect.Pointer && typ.Elem().Kind() == reflect.Interface {
-		typ = typ.Elem()
+func AddStepType(typ reflect.Type, args ...any) {
+	stepReg.AddStepType(typ, args...)
+}
+
+func AddStepKind(srcKind reflect.Kind, step Step) {
+	stepReg.AddStepKind(srcKind, step)
+}
+
+func (r *stepRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, args ...any) {
+	switch len(args) {
+	case 1:
+		step := args[0].(Step)
+		stepReg.steps[dstIfSrcElseSrc] = step
+	case 2:
+		dstTyp := dstIfSrcElseSrc
+		dstIfSrcElseSrc = args[0].(reflect.Type)
+		step := args[1].(Step)
+		stepReg.steps[typeKey{dstTyp, dstIfSrcElseSrc}] = step
+	default:
+		panic(fmt.Sprintf("arguments invalid, expected 1 or 2, got %d", len(args)))
+	}
+}
+
+func (r *stepRegistry) AddStepKind(srcKind reflect.Kind, step Step) {
+	stepReg.steps[srcKind] = step
+}
+
+func (r *stepRegistry) Step(dstIfSrcElseSrc reflect.Type, _src ...reflect.Type) (Step, bool) {
+	return r.step(dstIfSrcElseSrc, _src)
+}
+
+func (r *stepRegistry) step(dstIfSrcElseSrc reflect.Type, _src []reflect.Type) (Step, bool) {
+	if len(_src) > 1 {
+		panic(fmt.Sprintf("arguments invalid, expected 1 or 0, got %d", len(_src)))
 	}
 
-	stepReg.byType[typ] = step
-}
+	var (
+		dst reflect.Type
+		src = dstIfSrcElseSrc
+	)
 
-func AddStepKind(knd reflect.Kind, step Step) {
-	stepReg.byKind[knd] = step
-	// switch s := step.(type) {
-	// case Step:
-	// stepReg.byKind[knd] = func() Step { return s }
-	// case func() Step:
-	// stepReg.byKind[knd] = s
-	// }
-}
+	if len(_src) == 1 {
+		dst = dstIfSrcElseSrc
+		src = _src[0]
+	}
 
-func (r *stepRegistry) getStep(src reflect.Type) (Step, bool) {
-	if step, ok := r.byType[src]; ok {
+	if dst == nil && src == nil {
+		panic("nil types provided")
+	}
+
+	if dst != nil && src == nil {
+		src = dst
+		dst = nil
+	}
+
+	if dst != nil {
+		if step, ok := r.steps[typeKey{dst, src}]; ok {
+			return step, true
+		}
+	}
+
+	if step, ok := r.steps[src]; ok {
 		return step, true
 	}
 
-	if step, ok := r.byKind[src.Kind()]; ok {
+	if step, ok := r.steps[src.Kind()]; ok {
 		return step, true
+	}
+
+	if src.Kind() == reflect.Pointer {
+		return r.step(dst, []reflect.Type{src.Elem()})
 	}
 
 	return nil, false

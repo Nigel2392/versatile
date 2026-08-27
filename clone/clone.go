@@ -8,15 +8,15 @@ import (
 )
 
 type Step interface {
-	Copy(s *State, dst, src reflect.Value) error
+	Copy(ctx context.Context, s *State, dst, src reflect.Value) error
 }
 
 type InitStep interface {
 	Step
-	Init(s *State, dst, src reflect.Type) (Step, error)
+	Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error)
 }
 
-func Copy[T any](ctx context.Context, dst *T, src T, opts ...func(*State)) (err error) {
+func Copy(ctx context.Context, dst any, src any, opts ...func(*State)) (err error) {
 	var (
 		rvDst = reflect.ValueOf(dst)
 		rvSrc = reflect.ValueOf(src)
@@ -34,9 +34,12 @@ func Copy[T any](ctx context.Context, dst *T, src T, opts ...func(*State)) (err 
 	return rcopy(ctx, rvDst, rvSrc, opts)
 }
 
+func CopyT[TYP any, PTR *TYP](ctx context.Context, dst PTR, src TYP, opts ...func(*State)) (err error) {
+	return Copy(ctx, dst, src, opts...)
+}
+
 func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []func(*State)) (err error) {
 	_state := new(State{
-		Ctx:      ctx,
 		pointers: make(map[oldPtr]newPtr),
 	})
 
@@ -58,7 +61,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 
 	// if dst is pointer to interface, see if step registered
 	// for said interface
-	if dst.Elem().Kind() == reflect.Interface {
+	if dstTyp.Kind() == reflect.Pointer && dstTyp.Elem().Kind() == reflect.Interface {
 		// retrieve copy steps
 		// not registered is OK -> check registry for src type
 		step, ok = state.Step(dstTyp.Elem())
@@ -75,18 +78,23 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 
 copyStep:
 	// initialize step if needed (complex types)
-	if i, ok := step.(InitStep); ok {
-		step, err = i.Init(state, dstTyp, srcTyp)
-		if err != nil {
-			return err
-		}
+	step, err = initStep(ctx, state, step, dstTyp, srcTyp)
+	if err != nil {
+		return err
 	}
 
 	// copy to dst
-	err = step.Copy(state, dst, src)
+	err = step.Copy(ctx, state, dst, src)
 
 	// ensure state lives through all steps
 	runtime.KeepAlive(_state)
 	return err
 
+}
+
+func initStep(ctx context.Context, state *State, step Step, dst, src reflect.Type) (_ Step, err error) {
+	if i, ok := step.(InitStep); ok {
+		step, err = i.Init(ctx, state, dst, src)
+	}
+	return step, err
 }

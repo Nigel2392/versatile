@@ -5,6 +5,11 @@ import (
 	"uuid"
 )
 
+type typeKey struct {
+	dst reflect.Type
+	src reflect.Type
+}
+
 func init() {
 	AddStepKind(reflect.Int, BaseStep{})
 	AddStepKind(reflect.Int8, BaseStep{})
@@ -28,9 +33,12 @@ func init() {
 	AddStepKind(reflect.Uint64, BaseStep{})
 	AddStepKind(reflect.Uintptr, BaseStep{})
 
-	AddStepKind(reflect.Pointer, PointerStep{})
 	AddStepKind(reflect.Bool, BaseStep{})
 	AddStepKind(reflect.String, BaseStep{})
+
+	AddStepKind(reflect.Pointer, PointerStep{})
+	AddStepKind(reflect.Struct, StructStep{})
+	AddStepKind(reflect.Slice, SliceStep{})
 
 	AddStepType(reflect.TypeFor[uuid.UUID](), UUIDStep{})
 }
