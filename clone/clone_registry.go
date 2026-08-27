@@ -4,16 +4,17 @@ import "reflect"
 
 type stepRegistry struct {
 	byType map[reflect.Type]Step
+	// byKind map[reflect.Kind]func() Step
 	byKind map[reflect.Kind]Step
 }
 
 var stepReg = new(stepRegistry{
 	byType: make(map[reflect.Type]Step),
+	// byKind: make(map[reflect.Kind]func() Step),
 	byKind: make(map[reflect.Kind]Step),
 })
 
 func AddStepType(typ reflect.Type, step Step) {
-
 	if typ.Kind() == reflect.Pointer && typ.Elem().Kind() == reflect.Interface {
 		typ = typ.Elem()
 	}
@@ -23,6 +24,12 @@ func AddStepType(typ reflect.Type, step Step) {
 
 func AddStepKind(knd reflect.Kind, step Step) {
 	stepReg.byKind[knd] = step
+	// switch s := step.(type) {
+	// case Step:
+	// stepReg.byKind[knd] = func() Step { return s }
+	// case func() Step:
+	// stepReg.byKind[knd] = s
+	// }
 }
 
 func (r *stepRegistry) getStep(src reflect.Type) (Step, bool) {

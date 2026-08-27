@@ -11,6 +11,11 @@ type Step interface {
 	Copy(s *State, dst, src reflect.Value) error
 }
 
+type InitStep interface {
+	Step
+	Init(s *State, dst, src reflect.Type) (Step, error)
+}
+
 func Copy[T any](ctx context.Context, dst *T, src T, opts ...func(*State)) (err error) {
 	var (
 		rvDst = reflect.ValueOf(dst)
@@ -46,6 +51,9 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	var (
 		step Step
 		ok   bool
+
+		srcTyp = src.Type()
+		dstTyp = dst.Type()
 	)
 
 	// if dst is pointer to interface, see if step registered
@@ -53,20 +61,28 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	if dst.Elem().Kind() == reflect.Interface {
 		// retrieve copy steps
 		// not registered is OK -> check registry for src type
-		step, ok = state.Step(dst.Type())
+		step, ok = state.Step(dstTyp.Elem())
 		if ok {
 			goto copyStep
 		}
 	}
 
 	// retrieve copy steps
-	step, ok = state.Step(src.Type())
+	step, ok = state.Step(srcTyp)
 	if !ok {
-		return ErrNoSteps.Wrapf("no steps found for %s", src.Type())
+		return ErrNoSteps.Wrapf("no steps found for %s", srcTyp)
+	}
+
+copyStep:
+	// initialize step if needed (complex types)
+	if i, ok := step.(InitStep); ok {
+		step, err = i.Init(state, dstTyp, srcTyp)
+		if err != nil {
+			return err
+		}
 	}
 
 	// copy to dst
-copyStep:
 	err = step.Copy(state, dst, src)
 
 	// ensure state lives through all steps

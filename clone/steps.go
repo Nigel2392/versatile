@@ -28,6 +28,7 @@ func init() {
 	AddStepKind(reflect.Uint64, BaseStep{})
 	AddStepKind(reflect.Uintptr, BaseStep{})
 
+	AddStepKind(reflect.Pointer, PointerStep{})
 	AddStepKind(reflect.Bool, BaseStep{})
 	AddStepKind(reflect.String, BaseStep{})
 
