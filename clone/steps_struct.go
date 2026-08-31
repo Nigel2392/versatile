@@ -25,12 +25,14 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 		// continue
 		// }
 
-		tag, ok := sf.Tag.Lookup(TAG_NAME)
-		if ok && tag == "-" {
-			continue
+		if sf.Tag != "" {
+			tag, ok := sf.Tag.Lookup(TAG_NAME)
+			if ok && tag == "-" {
+				continue
+			}
 		}
 
-		step, err = s.StepInit(ctx, reflect.PointerTo(sf.Type), sf.Type)
+		step, err = s.StepInit(ctx, sf.Type, sf.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -54,9 +56,13 @@ func (f StructStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) 
 	}
 
 	for _, fld := range f.steps {
+
+		targetFld := ntEl.FieldByIndex(fld.idx)
+		srcFld := srcElem.FieldByIndex(fld.idx)
+
 		err := fld.step.Copy(ctx, s,
-			ntEl.FieldByIndex(fld.idx).Addr(),
-			srcElem.FieldByIndex(fld.idx),
+			targetFld.Addr(),
+			srcFld,
 		)
 		if err != nil {
 			return err
@@ -67,6 +73,14 @@ setValue:
 	if !srcIsPtr {
 		nt = ntEl
 	}
+
+	//	dst = dst.Elem()
+	//
+	//	for dst.Kind() == reflect.Interface {
+	//		dst = dst.Elem()
+	//	}
+	//
+	//	dst.Set(nt)
 
 	dst.Elem().Set(nt)
 	return nil

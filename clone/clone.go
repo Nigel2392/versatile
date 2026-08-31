@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"runtime"
 	"unsafe"
+
+	"github.com/Nigel2392/errors"
 )
 
 type Step interface {
@@ -61,26 +63,59 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 
 	// if dst is pointer to interface, see if step registered
 	// for said interface
-	if dstTyp.Kind() == reflect.Pointer && dstTyp.Elem().Kind() == reflect.Interface {
-		// retrieve copy steps
-		// not registered is OK -> check registry for src type
-		step, ok = state.Step(dstTyp.Elem())
-		if ok {
-			goto copyStep
+	if dstTyp.Kind() == reflect.Pointer {
+
+		// handle copy(****int, ***int)
+		var dptrs int
+		var ndstTyp = dstTyp
+		for ndstTyp.Kind() == reflect.Pointer {
+			ndstTyp = ndstTyp.Elem()
+			dptrs++
+		}
+
+		var sptrs int
+		var sdstTyp = srcTyp
+		for sdstTyp.Kind() == reflect.Pointer {
+			sdstTyp = sdstTyp.Elem()
+			sptrs++
+		}
+
+		// -1 because dst should always be ptr for src
+		dptrs = (dptrs - 1) - sptrs
+
+		if dptrs > 0 {
+			var d = dst
+			for i := range dptrs {
+				if dst.IsNil() && i > 0 {
+					d.Set(reflect.Zero(dst.Type()))
+				}
+				d = dst
+				dst = dst.Elem()
+			}
+		}
+
+		// see if dst is interface type and if any steps are registered for said type.
+		if ndstTyp.Kind() == reflect.Interface {
+			// retrieve copy steps
+			// not registered is OK -> check registry for src type
+			step, ok = state.Step(ndstTyp, srcTyp)
+			if ok {
+				goto copyStep
+			}
 		}
 	}
 
 	// retrieve copy steps
-	step, ok = state.Step(srcTyp)
+	step, ok = state.Step(dstTyp, srcTyp)
 	if !ok {
 		return ErrNoSteps.Wrapf("no steps found for %s", srcTyp)
 	}
 
 copyStep:
-	// initialize step if needed (complex types)
+	// initialize step if needed (complex types or custom steps)
 	step, err = initStep(ctx, state, step, dstTyp, srcTyp)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not initialize step")
 	}
 
 	// copy to dst

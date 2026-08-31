@@ -102,7 +102,7 @@ func TestSteps(t *testing.T) {
 
 		defer func() {
 			if r := recover(); r != nil {
-				t.Errorf("Exception while executing tests: %v", r)
+				t.Errorf("Exception while executing tests: %v: %s", r, string(debug.Stack()))
 			}
 		}()
 
@@ -161,7 +161,11 @@ func TestSteps(t *testing.T) {
 			var i = new(myFace)
 			var s = &myStruct{"hello world"}
 			if err := Copy(t.Context(), i, s); err != nil {
-				t.Errorf("expected no error, got %v", err)
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			if *i == nil {
+				t.Fatal("expected 'i' not nil, got nil")
 			}
 
 			if (*i).StructMethod() != s.val {
@@ -175,23 +179,65 @@ func TestSteps(t *testing.T) {
 		}))
 
 		t.Run("IfaceSlice", testFunc(func(t *testing.T) {
-			var i = new(any)
-			var s = 55
-			if err := Copy(t.Context(), i, s); err != nil {
+			var i []any
+			var s = []int{1, 2, 3}
+			if err := Copy(t.Context(), &i, s); err != nil {
 				t.Errorf("expected no error, got %v", err)
 			}
 
-			if *i != s {
-				t.Errorf("expected 'i' to be %d, got %d", s, *i)
+			if len(i) != len(s) {
+				t.Errorf("expected len(i) to be %d, got %d", len(s), len(i))
 			} else {
-				t.Logf("i == %d: %d", *i, s)
+				t.Logf("len(i) == %d: %d", len(i), len(s))
 			}
 
-			s = 5
-
-			t.Log(*i, s)
+			if i[0] != s[0] || i[1] != s[1] || i[2] != s[2] {
+				t.Errorf("%v != %v", i, s)
+			}
 		}))
+	})
 
+	t.Run("ArrayToSlice", func(t *testing.T) {
+		t.Run("StrictTypes", func(t *testing.T) {
+			var i []int
+			var s = [3]int{1, 2, 3}
+
+			if err := Copy(t.Context(), &i, s); err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			if len(i) != len(s) || i[0] != s[0] || i[1] != s[1] || i[2] != s[2] {
+				t.Errorf("expected %v, got %v", s, i)
+			}
+		})
+
+		t.Run("TypeToIface", func(t *testing.T) {
+			t.Run("Slice", func(t *testing.T) {
+				var i []any
+				var s = [3]int{1, 2, 3}
+
+				if err := Copy(t.Context(), &i, s); err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				if len(i) != len(s) || i[0] != s[0] || i[1] != s[1] || i[2] != s[2] {
+					t.Errorf("expected %v, got %v", s, i)
+				}
+			})
+
+			t.Run("Interface{}", func(t *testing.T) {
+				var i any
+				var s = [3]int{1, 2, 3}
+
+				if err := Copy(t.Context(), &i, s); err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				if !reflect.DeepEqual(i, s) {
+					t.Errorf("expected i to be %T(%v), got %T(%v)", s, s, i, i)
+				}
+			})
+		})
 	})
 
 	for _, test := range stepTests {
@@ -223,4 +269,81 @@ func TestSteps(t *testing.T) {
 			)
 		})
 	}
+}
+
+func TestSharedPointers(t *testing.T) {
+	type sharedPtrs struct {
+		A *int
+		B *int
+	}
+
+	// We maken 1 variabele aan en laten BEIDE pointers daarnaar wijzen.
+	val := 42
+	src := sharedPtrs{
+		A: &val,
+		B: &val,
+	}
+	var dst sharedPtrs
+
+	if err := Copy(t.Context(), &dst, src); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// 1. Check of het écht een clone is (mag niet naar het origineel wijzen)
+	if dst.A == src.A {
+		t.Fatal("dst.A points to the same address as src.A (not deeply cloned)", src.A, dst.A)
+	}
+
+	// 2. Check of de gedeelde relatie in de clone intact is gebleven
+	if dst.A != dst.B {
+		t.Fatalf("expected dst.A and dst.B to point to the SAME address, got %p and %p", dst.A, dst.B)
+	}
+
+	// 3. Dubbelcheck via mutatie
+	*dst.A = 99
+	if *dst.B != 99 {
+		t.Errorf("mutating dst.A did not mutate dst.B, shared state is broken!")
+	}
+}
+
+func TestSharedSlices(t *testing.T) {
+	type sharedSlices struct {
+		S1 []int
+		S2 []int
+	}
+
+	backingArray := []int{10, 20, 30, 40, 50}
+
+	src := sharedSlices{
+		S1: backingArray,
+		S2: backingArray,
+	}
+	var dst sharedSlices
+
+	if err := Copy(t.Context(), &dst, src); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	dst.S1[0] = 999
+	if src.S1[0] == 999 {
+		t.Fatalf("modifying clone mutated the original array (not deeply cloned)")
+	}
+
+	dst.S1[2] = 777
+
+	// Aangepast: vergelijk index 2 van S2 met index 2 van S1
+	if dst.S2[2] != 777 {
+		t.Fatalf(`SHARED SLICE STATE BROKEN! 
+dst.S1 and dst.S2 do not share the same backing array in the clone.
+Expected dst.S2[2] to be 777, got %d`, dst.S2[2])
+	} else {
+		t.Log("[SUCCESS]: Overlapping slices share the same backing array in the clone!")
+	}
+
+	if backingArray[2] == 777 {
+		t.Fatalf("expected backing array not to be changed: %v == %v", dst.S1, backingArray)
+	} else {
+		t.Logf("backingArray: %v\n\t\tdst.S1: %v", backingArray, dst.S1)
+	}
+
 }

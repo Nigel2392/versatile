@@ -3,6 +3,8 @@ package clone
 import (
 	"context"
 	"reflect"
+
+	"github.com/Nigel2392/errors"
 )
 
 type SliceStep struct {
@@ -10,12 +12,10 @@ type SliceStep struct {
 }
 
 func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
-	var ok bool
-	f.step, ok = s.Step(dst.Elem(), src.Elem())
-	if !ok {
-		return nil, ErrNoSteps.Wrapf("no steps found for %s", src)
+	f.step, err = s.StepInit(ctx, dst.Elem(), src.Elem())
+	if err != nil {
+		err = errors.Wrap(err, "SliceStep.Init")
 	}
-	f.step, err = initStep(ctx, s, f.step, dst, src)
 	return f, err
 }
 
@@ -27,16 +27,53 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 	}
 
 	newSlice, cached := s.MakeSlice(src, dst.Type().Elem(), srcLen)
+
+	dst.Elem().Set(newSlice)
+
 	if cached {
 		return nil
 	}
 
 	for i := range srcLen {
 		if err := f.step.Copy(ctx, s, newSlice.Index(i).Addr(), src.Index(i)); err != nil {
-			return err
+			return errors.Wrap(err, "SliceStep.Copy")
 		}
 	}
 
-	dst.Elem().Set(newSlice)
+	return nil
+}
+
+type ArrayStep struct {
+	SliceStep
+}
+
+func (f ArrayStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
+	step, err = f.SliceStep.Init(ctx, s, dst, src)
+	if err != nil {
+		err = errors.Wrap(err, "ArrayStep.Init")
+	}
+	f.SliceStep = step.(SliceStep)
+	return f, err
+}
+
+func (f ArrayStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+	srcLen := src.Len()
+	dstLen := dst.Len()
+	if dstLen < srcLen {
+		srcLen = dstLen
+	}
+
+	var i int
+	for i = 0; i < srcLen; i++ {
+		if err := f.step.Copy(ctx, s, dst.Index(i), src.Index(i)); err != nil {
+			return errors.Wrap(err, "ArrayStep.Copy")
+		}
+	}
+
+	for ; i < dstLen; i++ {
+		item := dst.Index(i)
+		item.Set(reflect.Zero(item.Type()))
+	}
+
 	return nil
 }

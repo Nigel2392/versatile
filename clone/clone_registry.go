@@ -13,31 +13,42 @@ var stepReg = new(stepRegistry{
 	steps: make(map[any]Step),
 })
 
-func AddStepType(typ reflect.Type, args ...any) {
-	stepReg.AddStepType(typ, args...)
+func AddStepType(dstIfSrcElseSrc reflect.Type, args ...any) {
+	stepReg.AddStepType(dstIfSrcElseSrc, args...)
 }
 
-func AddStepKind(srcKind reflect.Kind, step Step) {
-	stepReg.AddStepKind(srcKind, step)
+func AddStepKind(dstIfSrcElseSrc reflect.Kind, args ...any) {
+	stepReg.AddStepKind(dstIfSrcElseSrc, args...)
 }
 
-func (r *stepRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, args ...any) {
-	switch len(args) {
+func (r *stepRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, src ...any) {
+	switch len(src) {
 	case 1:
-		step := args[0].(Step)
+		step := src[0].(Step)
 		stepReg.steps[dstIfSrcElseSrc] = step
 	case 2:
 		dstTyp := dstIfSrcElseSrc
-		dstIfSrcElseSrc = args[0].(reflect.Type)
-		step := args[1].(Step)
-		stepReg.steps[typeKey{dstTyp, dstIfSrcElseSrc}] = step
+		dstIfSrcElseSrc = src[0].(reflect.Type)
+		step := src[1].(Step)
+		stepReg.steps[duo[reflect.Type]{dstTyp, dstIfSrcElseSrc}] = step
 	default:
-		panic(fmt.Sprintf("arguments invalid, expected 1 or 2, got %d", len(args)))
+		panic(fmt.Sprintf("arguments invalid, expected 1 or 2, got %d", len(src)))
 	}
 }
 
-func (r *stepRegistry) AddStepKind(srcKind reflect.Kind, step Step) {
-	stepReg.steps[srcKind] = step
+func (r *stepRegistry) AddStepKind(dstIfSrcElseSrc reflect.Kind, src ...any) {
+	switch len(src) {
+	case 1:
+		step := src[0].(Step)
+		stepReg.steps[dstIfSrcElseSrc] = step
+	case 2:
+		dstKnd := dstIfSrcElseSrc
+		dstIfSrcElseSrc = src[0].(reflect.Kind)
+		step := src[1].(Step)
+		stepReg.steps[duo[reflect.Kind]{dstKnd, dstIfSrcElseSrc}] = step
+	default:
+		panic(fmt.Sprintf("arguments invalid, expected 1 or 2, got %d", len(src)))
+	}
 }
 
 func (r *stepRegistry) Step(dstIfSrcElseSrc reflect.Type, _src ...reflect.Type) (Step, bool) {
@@ -63,15 +74,25 @@ func (r *stepRegistry) step(dstIfSrcElseSrc reflect.Type, _src []reflect.Type) (
 		panic("nil types provided")
 	}
 
-	if dst != nil && src == nil {
-		src = dst
-		dst = nil
-	}
-
 	if dst != nil {
-		if step, ok := r.steps[typeKey{dst, src}]; ok {
+
+		if step, ok := r.steps[duo[reflect.Type]{dst, src}]; ok {
 			return step, true
 		}
+
+		if dst.Kind() == reflect.Interface {
+			if step, ok := r.steps[dst]; ok {
+				return step, true
+			}
+		}
+
+		if step, ok := r.steps[duo[reflect.Kind]{dst.Kind(), src.Kind()}]; ok {
+			return step, true
+		}
+	}
+
+	if src == nil {
+		return nil, false
 	}
 
 	if step, ok := r.steps[src]; ok {
@@ -84,6 +105,10 @@ func (r *stepRegistry) step(dstIfSrcElseSrc reflect.Type, _src []reflect.Type) (
 
 	if src.Kind() == reflect.Pointer {
 		return r.step(dst, []reflect.Type{src.Elem()})
+	}
+
+	if dst.Kind() == reflect.Pointer {
+		return r.step(dst.Elem(), []reflect.Type{src})
 	}
 
 	return nil, false

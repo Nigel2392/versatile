@@ -14,6 +14,13 @@ type (
 	newPtr    = unsafe.Pointer
 )
 
+const (
+	SF_INVALID             CloneFlag = iota
+	SF_DISABLE_STATE_STEPS CloneFlag = 1 << iota
+
+	SF_SPEED = SF_DISABLE_STATE_STEPS
+)
+
 type State struct {
 	Flags CloneFlag
 
@@ -21,32 +28,62 @@ type State struct {
 	reg      *stepRegistry
 }
 
+func Flag(flag CloneFlag) func(s *State) {
+	return func(s *State) {
+		s.Flags = flag
+	}
+}
+
+type value struct {
+	_   uintptr
+	ptr uintptr
+	_   uintptr
+}
+
 func (s *State) New(oldPtr reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, wasCached bool) {
-	oldP := oldPtr.Pointer()
-	if v, ok := s.pointers[oldP]; ok {
+	op := *(*value)(unsafe.Pointer(&oldPtr))
+	if v, ok := s.pointers[op.ptr]; ok {
 		return reflect.NewAt(newTyp, v), true
 	}
 
 	n := reflect.New(newTyp)
-	s.pointers[oldP] = n.UnsafePointer()
+	s.pointers[op.ptr] = n.UnsafePointer()
 	return n, false
 }
 
-func (s *State) MakeSlice(oldPtr reflect.Value, newTyp reflect.Type, l int) (newOrCached reflect.Value, wasCached bool) {
-	oldP := oldPtr.Pointer()
-	if v, ok := s.pointers[oldP]; ok {
-		return reflect.SliceAt(newTyp, v, l), true
+func (s *State) MakeSlice(oldPtr reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
+	var op value
+
+	if oldPtr.Kind() == reflect.Array {
+		op = *(*value)(unsafe.Pointer(&oldPtr))
+	} else {
+		op.ptr = oldPtr.Pointer()
 	}
 
-	n := reflect.MakeSlice(newTyp, l, l)
-	s.pointers[oldP] = n.UnsafePointer()
+	if v, ok := s.pointers[op.ptr]; ok {
+		return reflect.SliceAt(newTyp.Elem(), v, l), true
+	}
+
+	if newTyp.Kind() == reflect.Interface {
+		newTyp = oldPtr.Type()
+	}
+
+	if oldPtr.Kind() == reflect.Array && (newTyp.Kind() == reflect.Array) {
+		n = reflect.New(oldPtr.Type())
+		s.pointers[op.ptr] = n.UnsafePointer()
+		n = n.Elem()
+	} else {
+		n = reflect.MakeSlice(newTyp, l, oldPtr.Cap())
+		s.pointers[op.ptr] = n.UnsafePointer()
+	}
+
 	return n, false
 }
 
 func (s *State) MakeMap(oldPtr reflect.Value, newTyp reflect.Type, _len int) (newOrCached reflect.Value, wasCached bool) {
 	oldP := oldPtr.Pointer()
 	if v, ok := s.pointers[oldP]; ok {
-		return reflect.NewAt(newTyp, v).Elem(), true
+		return reflect.NewAt(newTyp, unsafe.Pointer(&v)).Elem(), true
 	}
 
 	n := reflect.MakeMapWithSize(newTyp, _len)
@@ -80,17 +117,23 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 }
 
 func stepForState(s *State, st Step) Step {
-	if st == nil {
-		return nil
+	if st == nil || s.Flags.Is(SF_DISABLE_STATE_STEPS) {
+		return st
 	}
-	if i, ok := st.(InitStep); ok {
-		return istateStep{s: s, w: i}
+
+	switch w := st.(type) {
+	case InitStep:
+		return istateStep{
+			w: w,
+		}
 	}
-	return stateStep[Step]{s: s, w: st}
+
+	return stateStep[Step]{
+		w: st,
+	}
 }
 
 type stateStep[T Step] struct {
-	s *State
 	w T
 }
 
@@ -119,7 +162,14 @@ type istateStep struct {
 func (t istateStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
 	step, err = t.w.Init(ctx, s, dst, src)
 	if step != nil {
-		step = stateStep[Step]{s: s, w: step}
+		if i, ok := step.(InitStep); ok {
+			t.w = i
+			step = t
+		} else {
+			step = stateStep[Step]{
+				w: step,
+			}
+		}
 	}
 	return step, err
 }

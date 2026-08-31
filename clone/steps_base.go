@@ -20,7 +20,14 @@ func (f FuncStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error 
 type BaseStep struct{}
 
 func (f BaseStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error {
-	target := d.Elem()
+	target := d
+
+	// might already be elem
+	if d.Kind() == reflect.Pointer {
+		target = d.Elem()
+	} else if !d.CanAddr() {
+		return ErrNotPointer.Wrapf("%v is not adressable", d.Interface())
+	}
 
 	if target.CanSet() && i.CanInterface() {
 		target.Set(i)

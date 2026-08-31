@@ -5,9 +5,9 @@ import (
 	"uuid"
 )
 
-type typeKey struct {
-	dst reflect.Type
-	src reflect.Type
+type duo[T comparable] struct {
+	dst T
+	src T
 }
 
 func init() {
@@ -30,15 +30,21 @@ func init() {
 	AddStepKind(reflect.Complex64, BaseStep{})
 	AddStepKind(reflect.Complex128, BaseStep{})
 
-	AddStepKind(reflect.Uint64, BaseStep{})
-	AddStepKind(reflect.Uintptr, BaseStep{})
-
 	AddStepKind(reflect.Bool, BaseStep{})
 	AddStepKind(reflect.String, BaseStep{})
 
 	AddStepKind(reflect.Pointer, PointerStep{})
+	AddStepKind(reflect.Interface, FromInterfaceStep{})
 	AddStepKind(reflect.Struct, StructStep{})
+
 	AddStepKind(reflect.Slice, SliceStep{})
+	AddStepKind(reflect.Array, SliceStep{})
+
+	AddStepKind(reflect.Slice, reflect.Slice, SliceStep{})
+	AddStepKind(reflect.Slice, reflect.Array, SliceStep{})
+
+	AddStepKind(reflect.Array, reflect.Slice, ArrayStep{})
+	AddStepKind(reflect.Array, reflect.Array, ArrayStep{})
 
 	AddStepType(reflect.TypeFor[uuid.UUID](), UUIDStep{})
 }
