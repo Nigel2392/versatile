@@ -28,7 +28,7 @@ func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (s
 func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
 	srcLen := src.Len()
 	if src.Kind() == reflect.Slice && src.IsNil() {
-		dst.Set(reflect.Zero(dst.Type()))
+		dst.Elem().Set(reflect.Zero(dst.Type().Elem()))
 		return nil
 	}
 
@@ -40,7 +40,7 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 	}
 
 	for i := range srcLen {
-		if err := f.step.Copy(ctx, s, newSlice.Index(i), src.Index(i)); err != nil {
+		if err := f.step.Copy(ctx, s, newSlice.Index(i).Addr(), src.Index(i)); err != nil {
 			return errors.Wrap(err, "SliceStep.Copy")
 		}
 	}
@@ -64,6 +64,8 @@ func (f ToArrayStep) Init(ctx context.Context, s *State, dst, src reflect.Type) 
 }
 
 func (f ToArrayStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+	dst = dst.Elem() // deref ptr to dst
+
 	srcLen := src.Len()
 	dstLen := dst.Len()
 	if dstLen < srcLen {
@@ -72,7 +74,7 @@ func (f ToArrayStep) Copy(ctx context.Context, s *State, dst, src reflect.Value)
 
 	var i int
 	for i = 0; i < srcLen; i++ {
-		if err := f.step.Copy(ctx, s, dst.Index(i), src.Index(i)); err != nil {
+		if err := f.step.Copy(ctx, s, dst.Index(i).Addr(), src.Index(i)); err != nil {
 			return errors.Wrap(err, "ArrayStep.Copy")
 		}
 	}

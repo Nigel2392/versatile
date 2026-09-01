@@ -59,12 +59,12 @@ func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type
 	cDst := dst
 	cSrc := src
 
-	if dst.Kind() == reflect.Interface {
-		cDst = nil
-	}
-
 	if src.Kind() == reflect.Interface {
 		cSrc = nil
+	}
+
+	if dst.Kind() == reflect.Interface {
+		cDst = cSrc
 	}
 
 	if cDst == nil && cSrc == nil {
@@ -88,22 +88,24 @@ func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Valu
 	for src.Kind() == reflect.Interface {
 		src = src.Elem()
 		if !src.IsValid() {
-			dst.Set(reflect.Zero(dst.Type()))
+			dst.Elem().Set(reflect.Zero(dst.Elem().Type()))
 			return nil
 		}
 	}
 
 	if f.step == nil {
-		f.step, err = s.StepInit(ctx, dst.Type(), src.Type())
+		f.step, err = s.StepInit(ctx, dst.Elem().Type(), src.Type())
 		if err != nil {
 			return errors.Wrap(err, "InterfaceStep.Copy")
 		}
 	}
 
-	err = f.step.Copy(ctx, s, dst, src)
+	newVal := reflect.New(src.Type())
+	err = f.step.Copy(ctx, s, newVal, src)
 	if err != nil {
-		err = errors.Wrap(err, "InterfaceStep.Copy")
+		return errors.Wrap(err, "InterfaceStep.Copy")
 	}
 
-	return err
+	dst.Elem().Set(newVal.Elem())
+	return nil
 }
