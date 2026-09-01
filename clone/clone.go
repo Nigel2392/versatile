@@ -2,8 +2,11 @@ package clone
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"unsafe"
 
 	"github.com/Nigel2392/errors"
@@ -83,19 +86,18 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		// -1 because dst should always be ptr for src
 		dptrs = (dptrs - 1) - sptrs
 
-		if dptrs > 0 {
-			var d = dst
-			for i := range dptrs {
-				if dst.IsNil() && i > 0 {
-					d.Set(reflect.Zero(dst.Type()))
-				}
-				d = dst
-				dst = dst.Elem()
+		var d = dst
+		for i := range dptrs {
+			if dst.IsNil() && i > 0 {
+				d.Set(reflect.Zero(dst.Type()))
 			}
+			d = dst
+			dst = dst.Elem()
 		}
 
 		// see if dst is interface type and if any steps are registered for said type.
 		if ndstTyp.Kind() == reflect.Interface {
+
 			// retrieve copy steps
 			// not registered is OK -> check registry for src type
 			step, ok = state.Step(ndstTyp, srcTyp)
@@ -112,6 +114,9 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	}
 
 copyStep:
+
+	fmt.Printf("[CLONE] %T %s %s\n", unwrapStep(step), dstTyp, srcTyp)
+
 	// initialize step if needed (complex types or custom steps)
 	step, err = initStep(ctx, state, step, dstTyp, srcTyp)
 	if err != nil {
@@ -132,4 +137,51 @@ func initStep(ctx context.Context, state *State, step Step, dst, src reflect.Typ
 		step, err = i.Init(ctx, state, dst, src)
 	}
 	return step, err
+}
+
+func unwrapStep(step Step) Step {
+	if u, ok := step.(interface{ Unwrap() Step }); ok {
+		return u.Unwrap()
+	}
+	return step
+}
+
+func formatStack(skip int, _len int) {
+	// Allocate a slice to hold the program counters (PCs)
+	pc := make([]uintptr, 32)
+	// +1 to skip FormatStack itself
+	n := runtime.Callers(skip+1, pc)
+	if n == 0 {
+		return
+	}
+
+	pc = pc[:n]
+	frames := runtime.CallersFrames(pc)
+
+	var stackLines []string
+	for {
+		frame, more := frames.Next()
+
+		// Skip runtime or testing frames if desired (optional)
+		if strings.Contains(frame.File, "src/runtime/") {
+			if !more {
+				break
+			}
+			continue
+		}
+
+		// Clean up file path: use base name or shorten it
+		fileName := filepath.Base(frame.File)
+
+		// Format: FunctionName
+		//         pkg/file.go:line
+		formatted := fmt.Sprintf("%s %s:%d", strings.Split(frame.Function, ".")[strings.Count(frame.Function, ".")], fileName, frame.Line)
+		stackLines = append(stackLines, formatted)
+
+		if !more {
+			break
+		}
+	}
+
+	fmt.Println(strings.Join(stackLines[:_len], "\n"))
 }

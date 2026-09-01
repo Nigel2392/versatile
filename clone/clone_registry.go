@@ -80,8 +80,8 @@ func (r *stepRegistry) step(dstIfSrcElseSrc reflect.Type, _src []reflect.Type) (
 			return step, true
 		}
 
-		if dst.Kind() == reflect.Interface {
-			if step, ok := r.steps[dst]; ok {
+		if dst.Kind() == reflect.Interface && dst.NumMethod() > 0 && (src.Kind() == reflect.Interface || src.AssignableTo(dst) || src.ConvertibleTo(dst)) {
+			if step, ok := r.steps[reflect.Interface]; ok {
 				return step, true
 			}
 		}
@@ -107,7 +107,7 @@ func (r *stepRegistry) step(dstIfSrcElseSrc reflect.Type, _src []reflect.Type) (
 		return r.step(dst, []reflect.Type{src.Elem()})
 	}
 
-	if dst.Kind() == reflect.Pointer {
+	if dst != nil && dst.Kind() == reflect.Pointer {
 		return r.step(dst.Elem(), []reflect.Type{src})
 	}
 

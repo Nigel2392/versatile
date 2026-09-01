@@ -277,7 +277,6 @@ func TestSharedPointers(t *testing.T) {
 		B *int
 	}
 
-	// We maken 1 variabele aan en laten BEIDE pointers daarnaar wijzen.
 	val := 42
 	src := sharedPtrs{
 		A: &val,
@@ -289,17 +288,14 @@ func TestSharedPointers(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// 1. Check of het écht een clone is (mag niet naar het origineel wijzen)
 	if dst.A == src.A {
 		t.Fatal("dst.A points to the same address as src.A (not deeply cloned)", src.A, dst.A)
 	}
 
-	// 2. Check of de gedeelde relatie in de clone intact is gebleven
 	if dst.A != dst.B {
 		t.Fatalf("expected dst.A and dst.B to point to the SAME address, got %p and %p", dst.A, dst.B)
 	}
 
-	// 3. Dubbelcheck via mutatie
 	*dst.A = 99
 	if *dst.B != 99 {
 		t.Errorf("mutating dst.A did not mutate dst.B, shared state is broken!")
@@ -331,7 +327,6 @@ func TestSharedSlices(t *testing.T) {
 
 	dst.S1[2] = 777
 
-	// Aangepast: vergelijk index 2 van S2 met index 2 van S1
 	if dst.S2[2] != 777 {
 		t.Fatalf(`SHARED SLICE STATE BROKEN! 
 dst.S1 and dst.S2 do not share the same backing array in the clone.

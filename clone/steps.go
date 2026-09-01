@@ -34,7 +34,7 @@ func init() {
 	AddStepKind(reflect.String, BaseStep{})
 
 	AddStepKind(reflect.Pointer, PointerStep{})
-	AddStepKind(reflect.Interface, FromInterfaceStep{})
+	AddStepKind(reflect.Interface, InterfaceStep{})
 	AddStepKind(reflect.Struct, StructStep{})
 
 	AddStepKind(reflect.Slice, SliceStep{})

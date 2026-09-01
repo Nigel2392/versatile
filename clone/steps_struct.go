@@ -3,6 +3,7 @@ package clone
 import (
 	"context"
 	"reflect"
+	"unsafe"
 )
 
 const TAG_NAME = "versatile"
@@ -49,38 +50,26 @@ func (f StructStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) 
 	var ntEl reflect.Value
 	var srcIsPtr = src.Kind() == reflect.Pointer
 	var srcElem = reflect.Indirect(src)
-	var nt, cached = s.New(src, srcElem.Type())
+	var nt = reflect.New(srcElem.Type())
 	ntEl = nt.Elem()
-	if cached {
-		goto setValue
-	}
 
 	for _, fld := range f.steps {
-
 		targetFld := ntEl.FieldByIndex(fld.idx)
 		srcFld := srcElem.FieldByIndex(fld.idx)
 
-		err := fld.step.Copy(ctx, s,
-			targetFld.Addr(),
-			srcFld,
+		err := fld.step.Copy(
+			ctx, s,
+			reflect.NewAt(targetFld.Type(), unsafe.Pointer(targetFld.UnsafeAddr())),
+			reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem(),
 		)
 		if err != nil {
 			return err
 		}
 	}
 
-setValue:
 	if !srcIsPtr {
 		nt = ntEl
 	}
-
-	//	dst = dst.Elem()
-	//
-	//	for dst.Kind() == reflect.Interface {
-	//		dst = dst.Elem()
-	//	}
-	//
-	//	dst.Set(nt)
 
 	dst.Elem().Set(nt)
 	return nil

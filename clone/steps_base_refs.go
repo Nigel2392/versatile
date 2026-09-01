@@ -12,28 +12,33 @@ type PointerStep struct {
 }
 
 func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (_ Step, err error) {
-	f.step, err = s.StepInit(ctx, dst, src.Elem())
+	// Bepaal het onderliggende type van de bestemming, tenzij het een interface is.
+	dstTyp := dst
+	if dst.Kind() == reflect.Pointer {
+		dstTyp = dst.Elem()
+	}
+	f.step, err = s.StepInit(ctx, dstTyp, src.Elem())
 	return f, err
 }
 
 func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
-	target := dst
-	if dst.Kind() == reflect.Pointer && dst.Elem().Kind() == reflect.Pointer {
-		target = dst.Elem()
-	}
+	target := dst.Elem()
 
 	if src.IsNil() {
-		if target.CanSet() {
-			target.Set(reflect.Zero(target.Type()))
-		}
+		target.Set(reflect.Zero(target.Type()))
 		return nil
 	}
 
-	newPtr, cached := s.New(src, target.Type().Elem())
-	if target.CanSet() {
-		target.Set(newPtr)
+	var allocTyp reflect.Type
+	if target.Kind() == reflect.Interface {
+		allocTyp = src.Type().Elem()
+	} else {
+		allocTyp = target.Type().Elem()
 	}
 
+	newPtr, cached := s.New(src, allocTyp)
+
+	target.Set(newPtr)
 	if cached {
 		return nil
 	}
@@ -41,9 +46,9 @@ func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value)
 	return f.step.Copy(ctx, s, newPtr, src.Elem())
 }
 
-type FromInterfaceStep struct{}
+type InterfaceStep struct{}
 
-func (f FromInterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
 	for src.Kind() == reflect.Interface {
 		src = src.Elem()
 		if !src.IsValid() {
@@ -54,12 +59,13 @@ func (f FromInterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.
 
 	step, err := s.StepInit(ctx, dst.Type(), src.Type())
 	if err != nil {
-		return errors.Wrap(err, "FromInterfaceStep.Copy")
+		return errors.Wrap(err, "InterfaceStep.Copy")
 	}
 
 	err = step.Copy(ctx, s, dst, src)
 	if err != nil {
-		err = errors.Wrap(err, "FromInterfaceStep.Copy")
+		err = errors.Wrap(err, "InterfaceStep.Copy")
 	}
+
 	return err
 }

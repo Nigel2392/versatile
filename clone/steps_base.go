@@ -3,7 +3,6 @@ package clone
 import (
 	"context"
 	"reflect"
-	"unsafe"
 )
 
 var (
@@ -20,29 +19,8 @@ func (f FuncStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error 
 type BaseStep struct{}
 
 func (f BaseStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error {
-	target := d
-
-	// might already be elem
-	if d.Kind() == reflect.Pointer {
-		target = d.Elem()
-	} else if !d.CanAddr() {
-		return ErrNotPointer.Wrapf("%v is not adressable", d.Interface())
-	}
-
-	if target.CanSet() && i.CanInterface() {
-		target.Set(i)
-		return nil
-	}
-
-	if target.CanAddr() && i.CanAddr() {
-		dstClean := reflect.NewAt(target.Type(), unsafe.Pointer(target.UnsafeAddr())).Elem()
-		srcClean := reflect.NewAt(i.Type(), unsafe.Pointer(i.UnsafeAddr())).Elem()
-
-		dstClean.Set(srcClean)
-		return nil
-	}
-
-	return ErrInvalid
+	d.Elem().Set(i)
+	return nil
 }
 
 type UUIDStep struct{}
