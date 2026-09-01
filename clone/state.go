@@ -2,9 +2,7 @@ package clone
 
 import (
 	"context"
-	"fmt"
 	"reflect"
-	"runtime/debug"
 	"unsafe"
 
 	"github.com/Nigel2392/versatile/bitcheck"
@@ -45,7 +43,6 @@ type value struct {
 func (s *State) New(oldPtr reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, wasCached bool) {
 	op := *(*value)(unsafe.Pointer(&oldPtr))
 	if v, ok := s.pointers[op.ptr]; ok {
-		fmt.Println(op.ptr, string(debug.Stack())[:1000])
 		return reflect.NewAt(newTyp, v), true
 	}
 

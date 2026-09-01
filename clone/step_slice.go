@@ -2,7 +2,6 @@ package clone
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
 	"github.com/Nigel2392/errors"
@@ -29,20 +28,18 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 
 	newSlice, cached := s.MakeSlice(src, dst.Type().Elem(), srcLen)
 
-	dst.Elem().Set(newSlice)
-	fmt.Println(dst.Type(), dst.Elem().Type(), src.Type(), newSlice.Type(), srcLen)
 	if cached {
+		dst.Elem().Set(newSlice)
 		return nil
 	}
 
-	fmt.Println(newSlice.Interface(), src.Interface(), cached, srcLen)
 	for i := range srcLen {
-		fmt.Println(newSlice.Index(i), src.Index(i))
 		if err := f.step.Copy(ctx, s, newSlice.Index(i).Addr(), src.Index(i)); err != nil {
 			return errors.Wrap(err, "SliceStep.Copy")
 		}
 	}
-	fmt.Println(newSlice.Interface(), src.Interface(), cached, srcLen)
+
+	dst.Elem().Set(newSlice)
 
 	return nil
 }
