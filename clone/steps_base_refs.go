@@ -12,13 +12,17 @@ type PointerStep struct {
 }
 
 func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (_ Step, err error) {
-	// Bepaal het onderliggende type van de bestemming, tenzij het een interface is.
-	dstTyp := dst
-	if dst.Kind() == reflect.Pointer {
-		dstTyp = dst.Elem()
+	if step, ok := CACHE.Step(dst, src); ok {
+		return step, nil
 	}
-	f.step, err = s.StepInit(ctx, dstTyp, src.Elem())
-	return f, err
+
+	f.step, err = s.StepInit(ctx, dst.Elem(), src.Elem())
+	if err != nil {
+		return f, errors.Wrap(err, "PointerStep.Copy")
+	}
+
+	CACHE.AddStepType(dst, src, f)
+	return f, nil
 }
 
 func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
@@ -36,7 +40,7 @@ func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value)
 		allocTyp = target.Type().Elem()
 	}
 
-	newPtr, cached := s.New(src, allocTyp)
+	newPtr, cached := s.UnsafeNew(src, target, allocTyp)
 
 	target.Set(newPtr)
 	if cached {
@@ -46,9 +50,41 @@ func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value)
 	return f.step.Copy(ctx, s, newPtr, src.Elem())
 }
 
-type InterfaceStep struct{}
+type InterfaceStep struct {
+	step Step
+}
 
-func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (_ Step, err error) {
+
+	cDst := dst
+	cSrc := src
+
+	if dst.Kind() == reflect.Interface {
+		cDst = nil
+	}
+
+	if src.Kind() == reflect.Interface {
+		cSrc = nil
+	}
+
+	if cDst == nil && cSrc == nil {
+		return f, nil
+	}
+
+	if step, ok := CACHE.Step(cDst, cSrc); ok {
+		return step, nil
+	}
+
+	f.step, err = s.StepInit(ctx, cDst, cSrc)
+	if err != nil && !errors.Is(err, ErrNoSteps) {
+		return f, errors.Wrap(err, "InterfaceStep.Init")
+	}
+
+	CACHE.AddStepType(cDst, cSrc, f)
+	return f, nil
+}
+
+func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) (err error) {
 	for src.Kind() == reflect.Interface {
 		src = src.Elem()
 		if !src.IsValid() {
@@ -57,12 +93,14 @@ func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Valu
 		}
 	}
 
-	step, err := s.StepInit(ctx, dst.Type(), src.Type())
-	if err != nil {
-		return errors.Wrap(err, "InterfaceStep.Copy")
+	if f.step == nil {
+		f.step, err = s.StepInit(ctx, dst.Type(), src.Type())
+		if err != nil {
+			return errors.Wrap(err, "InterfaceStep.Copy")
+		}
 	}
 
-	err = step.Copy(ctx, s, dst, src)
+	err = f.step.Copy(ctx, s, dst, src)
 	if err != nil {
 		err = errors.Wrap(err, "InterfaceStep.Copy")
 	}

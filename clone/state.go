@@ -40,26 +40,48 @@ type value struct {
 	_   uintptr
 }
 
+func getCacheKey(v reflect.Value) uintptr {
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.UnsafePointer:
+		return v.Pointer()
+	default:
+		op := *(*value)(unsafe.Pointer(&v))
+		return op.ptr
+	}
+}
+
+func (s *State) UnsafeNew(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, ok bool) {
+	op := getCacheKey(keyPtr)
+	if v, ok := s.pointers[op]; ok {
+		return reflect.NewAt(newTyp, v), true
+	}
+
+	// safely reuse the existing pointer
+	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp {
+		s.pointers[op] = dstVal.UnsafePointer()
+		return dstVal, false
+	}
+
+	// fallback to allocation
+	n := reflect.New(newTyp)
+	s.pointers[op] = n.UnsafePointer()
+	return n, false
+}
+
 func (s *State) New(oldPtr reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, wasCached bool) {
-	op := *(*value)(unsafe.Pointer(&oldPtr))
-	if v, ok := s.pointers[op.ptr]; ok {
+	op := getCacheKey(oldPtr)
+	if v, ok := s.pointers[op]; ok {
 		return reflect.NewAt(newTyp, v), true
 	}
 
 	n := reflect.New(newTyp)
-	s.pointers[op.ptr] = n.UnsafePointer()
+	s.pointers[op] = n.UnsafePointer()
 	return n, false
 }
 
-func (s *State) MakeSlice(oldPtr reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
-	var op value
-	if oldPtr.Kind() == reflect.Array {
-		op = *(*value)(unsafe.Pointer(&oldPtr))
-	} else {
-		op.ptr = oldPtr.Pointer()
-	}
-
-	if v, ok := s.pointers[op.ptr]; ok {
+func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
+	op := getCacheKey(oldPtr)
+	if v, ok := s.pointers[op]; ok {
 		return reflect.SliceAt(newTyp.Elem(), v, l), true
 	}
 
@@ -67,13 +89,22 @@ func (s *State) MakeSlice(oldPtr reflect.Value, newTyp reflect.Type, l int) (n r
 		newTyp = oldPtr.Type()
 	}
 
+	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp {
+		el := dstVal.Elem()
+		el.Grow(l - el.Len())
+		el.SetLen(l)
+		el.SetCap(l)
+		s.pointers[op] = el.UnsafePointer()
+		return el, false
+	}
+
 	if oldPtr.Kind() == reflect.Array && (newTyp.Kind() == reflect.Array) {
 		n = reflect.New(oldPtr.Type())
-		s.pointers[op.ptr] = n.UnsafePointer()
+		s.pointers[op] = n.UnsafePointer()
 		n = n.Elem()
 	} else {
 		n = reflect.MakeSlice(newTyp, l, oldPtr.Cap())
-		s.pointers[op.ptr] = n.UnsafePointer()
+		s.pointers[op] = n.UnsafePointer()
 	}
 
 	return n, false
@@ -90,26 +121,26 @@ func (s *State) MakeMap(oldPtr reflect.Value, newTyp reflect.Type, _len int) (ne
 	return n, false
 }
 
-func (s *State) Step(dstIfSrcElseSrc reflect.Type, src ...reflect.Type) (Step, bool) {
+func (s *State) Step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
 	step, ok := s.__get_step(dstIfSrcElseSrc, src)
 	return stepForState(s, step), ok
 }
 
-func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src []reflect.Type) (Step, bool) {
+func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
 	if s.reg != nil {
-		step, ok := s.reg.step(dstIfSrcElseSrc, src)
+		step, ok := s.reg.Step(dstIfSrcElseSrc, src)
 		if ok {
 			return step, true
 		}
 	}
 
-	return stepReg.step(dstIfSrcElseSrc, src)
+	return stepReg.Step(dstIfSrcElseSrc, src)
 }
 
 func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step, err error) {
 	step, ok := s.Step(dst, src)
 	if !ok {
-		return nil, ErrNoSteps
+		return nil, ErrNoSteps.Wrapf("No steps found for %v and %v", dst, src)
 	}
 
 	return initStep(ctx, s, step, dst, src)

@@ -19,7 +19,11 @@ func (f FuncStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error 
 type BaseStep struct{}
 
 func (f BaseStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error {
-	d.Elem().Set(i)
+	if d.Kind() != reflect.Pointer {
+		d.Set(i)
+	} else {
+		d.Elem().Set(i)
+	}
 	return nil
 }
 

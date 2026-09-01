@@ -43,8 +43,8 @@ func init() {
 	AddStepKind(reflect.Slice, reflect.Slice, SliceStep{})
 	AddStepKind(reflect.Slice, reflect.Array, SliceStep{})
 
-	AddStepKind(reflect.Array, reflect.Slice, ArrayStep{})
-	AddStepKind(reflect.Array, reflect.Array, ArrayStep{})
+	AddStepKind(reflect.Array, reflect.Slice, ToArrayStep{})
+	AddStepKind(reflect.Array, reflect.Array, ToArrayStep{})
 
 	AddStepType(reflect.TypeFor[uuid.UUID](), UUIDStep{})
 }

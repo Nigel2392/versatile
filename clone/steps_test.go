@@ -67,6 +67,36 @@ var stepTests = []baseStepTest{
 	newBaseStepTest("my string", "my string"),
 	newBaseStepTest(true, true),
 
+	newBaseStepTest(
+		biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+		biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+	),
+
+	newBaseStepTest(
+		&biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+		&biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+	),
+
 	newBaseStepPtrTest(55, int(55)),
 	newBaseStepPtrTest(55, int8(55)),
 	newBaseStepPtrTest(55, int16(55)),
@@ -96,7 +126,16 @@ type myStruct struct{ val string }
 
 func (m myStruct) StructMethod() string { return m.val }
 
+type biggerStruct struct {
+	int
+	string
+	bool
+	float64
+}
+
 func TestSteps(t *testing.T) {
+	FLAGFN := Flag(SF_SPEED)
+	// FLAGFN := Flag(SF_INVALID)
 
 	t.Run("TestPointerCloneFunc", func(t *testing.T) {
 
@@ -242,9 +281,9 @@ func TestSteps(t *testing.T) {
 
 	for _, test := range stepTests {
 		t.Run(fmt.Sprintf("TestBaseStep-%T", test.src.Interface()), func(t *testing.T) {
-			err := rcopy(t.Context(), test.dst, test.src, []func(*State){})
+			err := rcopy(t.Context(), test.dst, test.src, []func(*State){FLAGFN})
 			if err != nil {
-				t.Error(err)
+				t.Errorf("%v: %+v", err, err)
 				return
 			}
 
@@ -318,6 +357,13 @@ func TestSharedSlices(t *testing.T) {
 
 	if err := Copy(t.Context(), &dst, src); err != nil {
 		t.Fatalf("expected no error, got %v", err)
+	}
+
+	t.Log(src)
+	t.Log(dst)
+
+	if !reflect.DeepEqual(src.S1, dst.S1) {
+		t.Fatalf("Slice mismatch: %v != %v", src.S1, dst.S1)
 	}
 
 	dst.S1[0] = 999

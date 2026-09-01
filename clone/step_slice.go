@@ -12,10 +12,16 @@ type SliceStep struct {
 }
 
 func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
+	if step, ok := CACHE.Step(dst, src); ok {
+		return step, nil
+	}
+
 	f.step, err = s.StepInit(ctx, dst.Elem(), src.Elem())
 	if err != nil {
 		err = errors.Wrap(err, "SliceStep.Init")
 	}
+
+	CACHE.AddStepType(dst, src, f)
 	return f, err
 }
 
@@ -26,7 +32,7 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 		return nil
 	}
 
-	newSlice, cached := s.MakeSlice(src, dst.Type().Elem(), srcLen)
+	newSlice, cached := s.MakeSlice(src, dst, dst.Type().Elem(), srcLen)
 
 	if cached {
 		dst.Elem().Set(newSlice)
@@ -34,7 +40,7 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 	}
 
 	for i := range srcLen {
-		if err := f.step.Copy(ctx, s, newSlice.Index(i).Addr(), src.Index(i)); err != nil {
+		if err := f.step.Copy(ctx, s, newSlice.Index(i), src.Index(i)); err != nil {
 			return errors.Wrap(err, "SliceStep.Copy")
 		}
 	}
@@ -44,11 +50,11 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 	return nil
 }
 
-type ArrayStep struct {
+type ToArrayStep struct {
 	SliceStep
 }
 
-func (f ArrayStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
+func (f ToArrayStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
 	step, err = f.SliceStep.Init(ctx, s, dst, src)
 	if err != nil {
 		err = errors.Wrap(err, "ArrayStep.Init")
@@ -57,7 +63,7 @@ func (f ArrayStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (s
 	return f, err
 }
 
-func (f ArrayStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+func (f ToArrayStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
 	srcLen := src.Len()
 	dstLen := dst.Len()
 	if dstLen < srcLen {
