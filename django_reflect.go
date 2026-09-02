@@ -19,6 +19,8 @@ func init() {
 	}
 }
 
+// if the bool mapvalue is true, a reverse of the same
+// rule will be created (i.e. Int is also /not/ safe to convert to String)
 var unsafeKinds = map[re.Kind]map[re.Kind]bool{
 	re.String: {
 		re.Int:    true,

@@ -15,16 +15,17 @@ type (
 )
 
 const (
-	SF_INVALID CloneFlag = iota
-	SF_NOWRAP  CloneFlag = 1 << iota
-	SF_KEEP_POINTERS
+	CF_INVALID CloneFlag = iota
+	CF_NOWRAP  CloneFlag = 1 << iota
+	CF_KEEP_POINTERS
+	CF_NO_CONVS
 )
 
 type State struct {
 	Flags CloneFlag
 
 	pointers map[oldPtr]newPtr
-	cache    Registry
+	cache    ResettableRegistry
 }
 
 func Flag(flag CloneFlag) func(s *State) {
@@ -107,7 +108,7 @@ func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp ref
 		return reflect.SliceAt(newTyp.Elem(), v, l), true
 	}
 
-	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp && newTyp.Kind() == reflect.Slice {
+	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp && (newTyp.Kind() == reflect.Array || newTyp.Kind() == reflect.Slice) {
 		el := dstVal.Elem()
 		switch newTyp.Kind() {
 		case reflect.Array:
@@ -144,7 +145,7 @@ func (s *State) MakeMap(oldPtr reflect.Value, newTyp reflect.Type, _len int) (ne
 	return n, false
 }
 
-func (s *State) Cache() Registry {
+func (s *State) Cache() ResettableRegistry {
 	if s.cache == nil {
 		return NopRegistry
 	}
@@ -177,7 +178,7 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 }
 
 func stepForState(s *State, st Step) Step {
-	if st == nil || s.Flags.Is(SF_NOWRAP) {
+	if st == nil || s.Flags.Is(CF_NOWRAP) {
 		return st
 	}
 

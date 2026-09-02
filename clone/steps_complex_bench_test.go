@@ -41,7 +41,7 @@ func BenchmarkClone_ComplexStruct(b *testing.B) {
 		Slice: []*inner{{Value: 2}, {Value: 3}},
 	}
 	stateCtx := SharedStateContext(
-		b.Context(), Flag(SF_NOWRAP),
+		b.Context(), Flag(CF_NOWRAP),
 	)
 
 	b.ResetTimer()
@@ -57,7 +57,7 @@ func BenchmarkClone_ComplexStruct(b *testing.B) {
 func BenchmarkClone_LargeTree(b *testing.B) {
 	// 3^6 = 729 nodes
 	src := createLargeTree(6)
-	FLAGFN := Flag(SF_NOWRAP)
+	FLAGFN := Flag(CF_NOWRAP)
 	stateCtx := SharedStateContext(
 		b.Context(), FLAGFN,
 	)
@@ -76,7 +76,7 @@ func BenchmarkClone_ComplexGraph(b *testing.B) {
 	// Graph with 200 interconnected nodes
 	src := createComplexGraph(200)
 	stateCtx := SharedStateContext(
-		b.Context(), Flag(SF_NOWRAP),
+		b.Context(), Flag(CF_NOWRAP),
 	)
 
 	b.ResetTimer()
@@ -101,7 +101,7 @@ func BenchmarkClone_DeeplyNestedSlice(b *testing.B) {
 		},
 	}
 	stateCtx := SharedStateContext(
-		b.Context(), Flag(SF_NOWRAP),
+		b.Context(), Flag(CF_NOWRAP),
 	)
 
 	b.ResetTimer()
@@ -121,7 +121,7 @@ func BenchmarkClone_SharedPointersSlice(b *testing.B) {
 		src[i] = shared
 	}
 	stateCtx := SharedStateContext(
-		b.Context(), Flag(SF_NOWRAP),
+		b.Context(), Flag(CF_NOWRAP),
 	)
 
 	b.ResetTimer()
@@ -143,7 +143,7 @@ func BenchmarkClone_InterfacePointers(b *testing.B) {
 		&inner{Value: 5},
 	}
 	stateCtx := SharedStateContext(
-		b.Context(), Flag(SF_NOWRAP),
+		b.Context(), Flag(CF_NOWRAP),
 	)
 
 	b.ResetTimer()

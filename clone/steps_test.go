@@ -134,8 +134,8 @@ type biggerStruct struct {
 }
 
 func TestSteps(t *testing.T) {
-	FLAGFN := Flag(SF_NOWRAP)
-	// FLAGFN := Flag(SF_INVALID)
+	FLAGFN := Flag(CF_NOWRAP)
+	// FLAGFN := Flag(CF_INVALID)
 
 	t.Run("TestPointerCloneFunc", func(t *testing.T) {
 
@@ -225,7 +225,7 @@ func TestSteps(t *testing.T) {
 			}
 
 			if len(i) != len(s) {
-				t.Errorf("expected len(i) to be %d, got %d", len(s), len(i))
+				t.Fatalf("expected len(i) to be %d, got %d", len(s), len(i))
 			} else {
 				t.Logf("len(i) == %d: %d", len(i), len(s))
 			}

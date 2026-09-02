@@ -117,8 +117,8 @@ type linkedList struct {
 func intPtr(v int) *int { return &v }
 
 func mustCopy(t *testing.T, dst, src any) {
-	FLAGFN := Flag(SF_NOWRAP)
-	// FLAGFN := Flag(SF_INVALID)
+	FLAGFN := Flag(CF_NOWRAP)
+	// FLAGFN := Flag(CF_INVALID)
 	t.Helper()
 	if err := Copy(t.Context(), dst, src, FLAGFN); err != nil {
 		t.Fatalf("Copy failed: %v", err)

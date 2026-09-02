@@ -60,8 +60,8 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		opt(state)
 	}
 
-	if !bitcheck.Is(state.Flags, SF_KEEP_POINTERS) {
-		defer clear(state.pointers)
+	if !bitcheck.Is(state.Flags, CF_KEEP_POINTERS) {
+		clear(state.pointers)
 	}
 
 	var (
@@ -76,9 +76,8 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 
 		// handle copy(****int, ***int)
 		var dptrs int
-		var ndstTyp = dstTyp
-		for ndstTyp.Kind() == reflect.Pointer {
-			ndstTyp = ndstTyp.Elem()
+		for dstTyp.Kind() == reflect.Pointer {
+			dstTyp = dstTyp.Elem()
 			dptrs++
 		}
 
@@ -101,16 +100,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 			dst = dst.Elem()
 		}
 
-		// see if dst is interface type and if any steps are registered for said type.
-		if ndstTyp.Kind() == reflect.Interface {
-
-			// retrieve copy steps
-			// not registered is OK -> check registry for src type
-			step, ok = state.Step(ndstTyp, srcTyp)
-			if ok {
-				goto copyStep
-			}
-		}
+		dstTyp = dst.Type()
 	}
 
 	// retrieve copy steps
@@ -119,7 +109,6 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		return ErrNoSteps.Wrapf("no steps found for %s and %s", dstTyp, srcTyp)
 	}
 
-copyStep:
 	// initialize step if needed (complex types or custom steps)
 	step, err = initStep(ctx, state, step, dstTyp, srcTyp)
 	if err != nil {

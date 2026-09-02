@@ -16,7 +16,12 @@ func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (s
 		return step, nil
 	}
 
-	f.step, err = s.StepInit(ctx, dst.Elem(), src.Elem())
+	dstElem := dst.Elem()
+	if dstElem.Kind() == reflect.Slice || dstElem.Kind() == reflect.Array {
+		dstElem = dstElem.Elem()
+	}
+
+	f.step, err = s.StepInit(ctx, reflect.PointerTo(dstElem), src.Elem())
 	if err != nil {
 		err = errors.Wrap(err, "SliceStep.Init")
 	}

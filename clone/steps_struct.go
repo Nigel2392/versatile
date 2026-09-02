@@ -53,7 +53,7 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 			dstSfTyp = dstSf.Type
 		}
 
-		step, err = s.StepInit(ctx, dstSfTyp, sf.Type)
+		step, err = s.StepInit(ctx, reflect.PointerTo(dstSfTyp), sf.Type)
 		if err != nil {
 			return f, errors.Wrapf(err, "StructStep.Init(%v)", sf.Index)
 		}

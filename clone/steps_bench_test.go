@@ -8,7 +8,7 @@ import (
 
 func BenchmarkSteps(b *testing.B) {
 
-	FLAGFN := Flag(SF_NOWRAP)
+	FLAGFN := Flag(CF_NOWRAP | CF_NO_CONVS)
 	// FLAGFN := Flag(SF_INVALID)
 
 	stateCtx := SharedStateContext(

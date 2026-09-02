@@ -102,7 +102,7 @@ func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Valu
 	}
 
 	if f.step == nil {
-		f.step, err = s.StepInit(ctx, dst.Elem().Type(), src.Type())
+		f.step, err = s.StepInit(ctx, dst.Type(), src.Type())
 		if err != nil {
 			return errors.Wrap(err, "InterfaceStep.Copy")
 		}
