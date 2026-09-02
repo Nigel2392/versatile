@@ -100,7 +100,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 			dst = dst.Elem()
 		}
 
-		dstTyp = dst.Type()
+		dstTyp = dst.Type().Elem()
 	}
 
 	// retrieve copy steps

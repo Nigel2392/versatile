@@ -17,11 +17,9 @@ func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) 
 	}
 
 	var dstElem reflect.Type
-	if dst != nil {
-		switch dst.Kind() {
-		case reflect.Pointer, reflect.Slice, reflect.Array, reflect.Map, reflect.Chan:
-			dstElem = dst.Elem()
-		}
+	switch dst.Kind() {
+	case reflect.Pointer, reflect.Slice, reflect.Array, reflect.Map:
+		dstElem = dst.Elem()
 	}
 
 	f.step, err = s.StepInit(ctx, dstElem, src.Elem())
@@ -68,14 +66,14 @@ func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type
 	cSrc := src
 
 	if dst.Kind() == reflect.Interface {
-		cDst = nil
+		cDst = src
 	}
 
 	if src.Kind() == reflect.Interface {
-		cSrc = nil
+		cSrc = cDst
 	}
 
-	if cDst == nil && cSrc == nil {
+	if cDst.Kind() == reflect.Interface && cSrc.Kind() == reflect.Interface {
 		return f, nil
 	}
 
@@ -102,7 +100,7 @@ func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Valu
 	}
 
 	if f.step == nil {
-		f.step, err = s.StepInit(ctx, dst.Type(), src.Type())
+		f.step, err = s.StepInit(ctx, src.Type(), src.Type())
 		if err != nil {
 			return errors.Wrap(err, "InterfaceStep.Copy")
 		}

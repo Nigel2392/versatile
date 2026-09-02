@@ -71,8 +71,6 @@ type BaseStep struct{}
 
 func (f BaseStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error) {
 
-	dst = dst.Elem()
-
 	if src.AssignableTo(dst) {
 		return f, nil
 	}

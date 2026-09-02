@@ -19,17 +19,14 @@ type StructStep struct {
 	steps []structFieldStep
 }
 
-func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
+func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error) {
 	if step, ok := s.Cache().Step(dst, src); ok {
 		return step, nil
 	}
 
 	var dstStrct reflect.Type
-	if dst != nil && dst.Kind() == reflect.Pointer &&
-		src.Kind() != reflect.Interface &&
-		(src == dst.Elem() || src.ConvertibleTo(dst.Elem())) &&
-		dst.Elem().Kind() == reflect.Struct {
-		dstStrct = dst.Elem()
+	if dst.Kind() == reflect.Struct {
+		dstStrct = dst
 	}
 
 	s.Cache().AddStepType(dst, src, &f) // cache reference to [StructStep]
@@ -53,7 +50,7 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 			dstSfTyp = dstSf.Type
 		}
 
-		step, err = s.StepInit(ctx, reflect.PointerTo(dstSfTyp), sf.Type)
+		step, err := s.StepInit(ctx, dstSfTyp, sf.Type)
 		if err != nil {
 			return f, errors.Wrapf(err, "StructStep.Init(%v)", sf.Index)
 		}

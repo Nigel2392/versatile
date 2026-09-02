@@ -88,10 +88,6 @@ func (r *stepRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
 	}
 
 	if dst != nil {
-		if dst.Kind() == reflect.Pointer {
-			dst = dst.Elem()
-		}
-
 		if step, ok := r.steps[duo[reflect.Kind]{dst.Kind(), src.Kind()}]; ok {
 			return step, true
 		}
