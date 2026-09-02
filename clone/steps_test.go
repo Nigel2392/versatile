@@ -134,8 +134,8 @@ type biggerStruct struct {
 }
 
 func TestSteps(t *testing.T) {
-	FLAGFN := Flag(CF_NOWRAP)
-	// FLAGFN := Flag(CF_INVALID)
+	// FLAGFN := Flag(CF_NOWRAP)
+	FLAGFN := Flag(CF_INVALID)
 
 	t.Run("TestPointerCloneFunc", func(t *testing.T) {
 

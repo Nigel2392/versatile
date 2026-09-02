@@ -37,6 +37,11 @@ func init() {
 	AddStepKind(reflect.Interface, InterfaceStep{})
 	AddStepKind(reflect.Struct, StructStep{})
 
+	AddStepKind(reflect.Map, MapStep{})
+	AddStepKind(reflect.Map, reflect.Map, MapStep{})
+	AddStepKind(reflect.Map, reflect.Struct, StructToMapStep{})
+	AddStepKind(reflect.Struct, reflect.Map, MapToStructStep{})
+
 	AddStepKind(reflect.Slice, SliceStep{})
 	AddStepKind(reflect.Array, SliceStep{})
 

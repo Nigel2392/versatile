@@ -10,6 +10,21 @@ import (
 	"github.com/Nigel2392/versatile/bitcheck"
 )
 
+var (
+	_ Step     = (*BaseStep)(nil)
+	_ Step     = (*UUIDStep)(nil)
+	_ InitStep = (*PointerStep)(nil)
+	_ InitStep = (*InterfaceStep)(nil)
+	_ InitStep = (*StructStep)(nil)
+	_ InitStep = (*MapStep)(nil)
+	_ InitStep = (*StructToMapStep)(nil)
+	_ InitStep = (*MapToStructStep)(nil)
+	_ InitStep = (*SliceStep)(nil)
+	_ InitStep = (*ToArrayStep)(nil)
+)
+
+const STRUCT_TAG = "clone"
+
 type Step interface {
 	Copy(ctx context.Context, s *State, dst, src reflect.Value) error
 }
@@ -17,6 +32,10 @@ type Step interface {
 type InitStep interface {
 	Step
 	Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error)
+}
+
+func CopyT[TYP any, PTR any](ctx context.Context, dst *PTR, src TYP, opts ...func(*State)) (err error) {
+	return Copy(ctx, dst, src, opts...)
 }
 
 func Copy(ctx context.Context, dst any, src any, opts ...func(*State)) (err error) {
@@ -37,23 +56,22 @@ func Copy(ctx context.Context, dst any, src any, opts ...func(*State)) (err erro
 	return rcopy(ctx, rvDst, rvSrc, opts)
 }
 
-func CopyT[TYP any, PTR *TYP](ctx context.Context, dst PTR, src TYP, opts ...func(*State)) (err error) {
-	return Copy(ctx, dst, src, opts...)
-}
-
 func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []func(*State)) (err error) {
 
-	var _state *State
-	var state, ok = StateFromContext(ctx)
+	var state *State
+	var _state, ok = StateFromContext(ctx)
 	if !ok {
 		_state = new(State{
 			pointers: make(map[oldPtr]newPtr),
 			cache:    &cacheRegistry{steps: make(map[any]Step)},
 		})
-
-		// prevents extra alloc
-		state = (*State)(noescape(unsafe.Pointer(_state)))
+	} else {
+		s := *_state
+		_state = &s
 	}
+
+	// prevents extra alloc (prevent state escapes to heap)
+	state = (*State)(noescape(unsafe.Pointer(_state)))
 
 	// apply customisations to state
 	for _, opt := range opts {
@@ -104,15 +122,12 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	}
 
 	// retrieve copy steps
-	step, ok = state.Step(dstTyp, srcTyp)
-	if !ok {
-		return ErrNoSteps.Wrapf("no steps found for %s and %s", dstTyp, srcTyp)
-	}
-
-	// initialize step if needed (complex types or custom steps)
-	step, err = initStep(ctx, state, step, dstTyp, srcTyp)
+	step, err = state.StepInit(ctx, dstTyp, srcTyp)
 	if err != nil {
-		return errors.Wrap(err, "could not initialize step")
+		return errors.Wrapf(
+			err, "error while retrieving Clone step for %s => %s",
+			srcTyp, dstTyp,
+		)
 	}
 
 	// copy to dst
@@ -129,4 +144,30 @@ func initStep(ctx context.Context, state *State, step Step, dst, src reflect.Typ
 		step, err = i.Init(ctx, state, dst, src)
 	}
 	return step, err
+}
+
+var setDirectKinds = func() reflect.Kind {
+	var n reflect.Kind
+	n |= 1 << reflect.Bool
+	n |= 1 << reflect.String
+	n |= 1 << reflect.Int
+	n |= 1 << reflect.Int8
+	n |= 1 << reflect.Int16
+	n |= 1 << reflect.Int32
+	n |= 1 << reflect.Int64
+	n |= 1 << reflect.Uint
+	n |= 1 << reflect.Uint8
+	n |= 1 << reflect.Uint16
+	n |= 1 << reflect.Uint32
+	n |= 1 << reflect.Uint64
+	n |= 1 << reflect.Float32
+	n |= 1 << reflect.Float64
+	n |= 1 << reflect.Complex64
+	n |= 1 << reflect.Complex128
+	n |= 1 << reflect.Uintptr
+	return n
+}()
+
+func isValueType(k reflect.Kind) bool {
+	return setDirectKinds&(1<<k) > 0
 }

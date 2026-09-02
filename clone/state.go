@@ -10,16 +10,19 @@ import (
 
 type (
 	CloneFlag = bitcheck.Flag
-	oldPtr    = uintptr
-	newPtr    = unsafe.Pointer
+
+	// type hints for the shared references object cache
+	oldPtr = uintptr
+	newPtr = unsafe.Pointer
 )
 
 const (
-	CF_INVALID CloneFlag = iota
-	CF_NOWRAP  CloneFlag = 1 << iota
-	CF_NOVALIDATE
-	CF_KEEP_POINTERS
-	CF_NO_CONVS
+	CF_INVALID       CloneFlag = iota
+	CF_NOWRAP        CloneFlag = 1 << iota // don't allow wrapping, even if a wrap function is provided
+	CF_NOVALIDATE                          // don't validate if dst is actually settable
+	CF_KEEP_POINTERS                       // don't reset the pointer cache after before copy with a shared state
+	CF_ONLY_PUB_FLDS                       // only public (non exported) struct fields can be cloned.
+	CF_NO_CONVS                            // don't allow conversions from, int32 to int64 (singular example)
 )
 
 type State struct {
@@ -30,46 +33,33 @@ type State struct {
 	cache    ResettableRegistry
 }
 
-func Flag(flag CloneFlag) func(s *State) {
+// Allow for enabling and disabling certain features
+//
+// Setting some of these flags can have an impact on performance and/or
+// functionality of the [Clone] function.
+func Flag(flag CloneFlag, reset ...bool) func(s *State) {
+	var _reset bool
+	if len(reset) > 0 {
+		_reset = reset[0]
+	}
+
+	if _reset {
+		return func(s *State) {
+			s.Flags = flag
+		}
+	}
+
 	return func(s *State) {
-		s.Flags = flag
+		s.Flags |= flag
 	}
 }
 
+// Allow for wrapping of steps to perform actions pre/post init
+// and pre/post copy.
 func WrapStep(fn func(*State, Step) Step) func(s *State) {
 	return func(s *State) {
 		s.wrapStep = fn
 	}
-}
-
-type stateContextKey struct{}
-
-func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Context {
-	var (
-		state *State
-		ok    bool
-	)
-
-	if state, ok = StateFromContext(ctx); !ok {
-		state = new(State{
-			pointers: make(map[oldPtr]newPtr),
-			cache:    &cacheRegistry{steps: make(map[any]Step)},
-		})
-
-		// only need to override context when state is not present already
-		ctx = context.WithValue(ctx, stateContextKey{}, state)
-	}
-
-	for _, opt := range opts {
-		opt(state)
-	}
-
-	return ctx
-}
-
-func StateFromContext(ctx context.Context) (*State, bool) {
-	s, ok := ctx.Value(stateContextKey{}).(*State)
-	return s, ok
 }
 
 type value struct {
@@ -88,6 +78,12 @@ func getCacheKey(v reflect.Value) uintptr {
 	}
 }
 
+// Initialize a new reflect.Value of type [newTyp]
+//
+// [keyPtr] is used to generate a cache key to properly clone any references that share the same pointer.
+//
+// If dstVal is a pointer, and it's [Elem] method returns a value of type [newTyp]
+// then [State.New] assumes it is safe to return (and cache) [dstVal].
 func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, ok bool) {
 	op := getCacheKey(keyPtr)
 	if v, ok := s.pointers[op]; ok {
@@ -106,6 +102,14 @@ func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.T
 	return n, false
 }
 
+// Initialize a new [reflect.Value] of kind [reflect.Array] or [reflect.Slice] with type [newTyp]
+//
+// [keyPtr] is used to generate a cache key to properly clone any references that share the same pointer.
+//
+// If dstVal is a pointer, and it's [Elem] method returns a value of type [newTyp]
+// then [State.New] assumes it is safe to return (and cache) [dstVal].
+//
+// If dstVal can be used, the slice is grown to length [l], with it's capacity and len set to [l].
 func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
 	if newTyp.Kind() == reflect.Interface {
 		newTyp = oldPtr.Type()
@@ -142,6 +146,12 @@ func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp ref
 	return n, false
 }
 
+// Initialize a new [reflect.Value] of kind [reflect.Map] with type [newTyp]
+//
+// [keyPtr] is used to generate a cache key to properly clone any references that share the same pointer.
+//
+// If dstVal is a pointer, and it's [Elem] method returns a value of type [newTyp]
+// then [State.New] assumes it is safe to return (and cache) [dstVal].
 func (s *State) MakeMap(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, _len int) (newOrCached reflect.Value, wasCached bool) {
 	op := getCacheKey(oldPtr)
 	if v, ok := s.pointers[op]; ok {
@@ -187,6 +197,10 @@ func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step
 }
 
 func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step, err error) {
+	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && !IsAllowedType(src) {
+		return nil, ErrInvalid.Wrapf("%s is specified as non-clonable", src)
+	}
+
 	step, ok := s.Step(dst, src)
 	if !ok {
 		return nil, ErrNoSteps.Wrapf("No steps found for %v and %v", dst, src)
@@ -196,14 +210,22 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 }
 
 func (s *State) StepCopy(ctx context.Context, step Step, dst, src reflect.Value) error {
+	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) {
 
-	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && dst.Kind() != reflect.Pointer && !dst.CanSet() {
-		if dst.CanInterface() {
-			dstf := dst.Interface()
-			return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
+		if dst.Kind() != reflect.Pointer && !dst.CanSet() {
+			if dst.CanInterface() {
+				dstf := dst.Interface()
+				return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
+			}
+			if !dst.IsValid() {
+				return ErrInvalid.Wrapf("dst is invalid, cannot copy src %v", src.Interface())
+			}
 		}
-		if !dst.IsValid() {
-			return ErrInvalid.Wrapf("dst is invalid, cannot copy src %v", src.Interface())
+
+		if !IsAllowedValue(src) {
+			return ErrInvalid.Wrapf(
+				"%s is specified as non-clonable", src.Type(),
+			)
 		}
 	}
 

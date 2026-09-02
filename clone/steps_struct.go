@@ -8,8 +8,6 @@ import (
 	"github.com/Nigel2392/errors"
 )
 
-const TAG_NAME = "versatile"
-
 type structFieldStep struct {
 	idx  []int
 	step Step
@@ -38,10 +36,14 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 		// }
 
 		if sf.Tag != "" {
-			tag, ok := sf.Tag.Lookup(TAG_NAME)
+			tag, ok := sf.Tag.Lookup(STRUCT_TAG)
 			if ok && tag == "-" {
 				continue
 			}
+		}
+
+		if !s.Flags.Is(CF_NOVALIDATE) && !IsAllowedType(sf.Type) {
+			continue
 		}
 
 		dstSfTyp := sf.Type
@@ -78,9 +80,9 @@ func (f StructStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) 
 		srcFld := src.FieldByIndex(fld.idx)
 
 		addrDst := reflect.NewAt(targetFld.Type(), unsafe.Pointer(targetFld.UnsafeAddr()))
-		addrSrc := reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
+		srcFldVal := reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
 
-		if err := s.StepCopy(ctx, fld.step, addrDst, addrSrc); err != nil {
+		if err := s.StepCopy(ctx, fld.step, addrDst, srcFldVal); err != nil {
 			return errors.Wrapf(err, "StructStep.Copy(%v)", fld.idx)
 		}
 	}
