@@ -12,7 +12,7 @@ type SliceStep struct {
 }
 
 func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
-	if step, ok := CACHE.Step(dst, src); ok {
+	if step, ok := s.Cache().Step(dst, src); ok {
 		return step, nil
 	}
 
@@ -21,7 +21,7 @@ func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (s
 		err = errors.Wrap(err, "SliceStep.Init")
 	}
 
-	CACHE.AddStepType(dst, src, f)
+	s.Cache().AddStepType(dst, src, f)
 	return f, err
 }
 

@@ -8,8 +8,13 @@ import (
 
 func BenchmarkSteps(b *testing.B) {
 
-	FLAGFN := Flag(SF_SPEED)
+	FLAGFN := Flag(SF_NOWRAP)
 	// FLAGFN := Flag(SF_INVALID)
+
+	stateCtx := SharedStateContext(
+		b.Context(), FLAGFN,
+	)
+	// stateCtx := b.Context()
 
 	b.Run("TestPointerCloneFunc", func(b *testing.B) {
 
@@ -22,7 +27,7 @@ func BenchmarkSteps(b *testing.B) {
 		var i = new(int)
 		var s = 55
 		for b.Loop() {
-			if err := Copy(b.Context(), &i, &s, FLAGFN); err != nil {
+			if err := Copy(stateCtx, &i, &s, FLAGFN); err != nil {
 				b.Errorf("expected no error, got %v", err)
 			}
 
@@ -52,7 +57,7 @@ func BenchmarkSteps(b *testing.B) {
 			var s = 55
 
 			for b.Loop() {
-				if err := Copy(b.Context(), &i, s, FLAGFN); err != nil {
+				if err := Copy(stateCtx, &i, s, FLAGFN); err != nil {
 					b.Errorf("expected no error, got %v", err)
 				}
 
@@ -67,7 +72,7 @@ func BenchmarkSteps(b *testing.B) {
 			var s = &myStruct{"hello world"}
 
 			for b.Loop() {
-				if err := Copy(b.Context(), i, s, FLAGFN); err != nil {
+				if err := Copy(stateCtx, i, s, FLAGFN); err != nil {
 					b.Errorf("expected no error, got %v", err)
 				}
 				*i = myStruct{}
@@ -81,7 +86,7 @@ func BenchmarkSteps(b *testing.B) {
 			var s = []int{1, 2, 3}
 
 			for b.Loop() {
-				if err := Copy(b.Context(), &i, s, FLAGFN); err != nil {
+				if err := Copy(stateCtx, &i, s, FLAGFN); err != nil {
 					b.Errorf("expected no error, got %v", err)
 				}
 
@@ -97,7 +102,7 @@ func BenchmarkSteps(b *testing.B) {
 			var s = [3]int{1, 2, 3}
 
 			for b.Loop() {
-				if err := Copy(b.Context(), &i, s, FLAGFN); err != nil {
+				if err := Copy(stateCtx, &i, s, FLAGFN); err != nil {
 					b.Errorf("expected no error, got %v", err)
 				}
 
@@ -111,7 +116,7 @@ func BenchmarkSteps(b *testing.B) {
 				var s = [3]int{1, 2, 3}
 
 				for b.Loop() {
-					if err := Copy(b.Context(), &i, s, FLAGFN); err != nil {
+					if err := Copy(stateCtx, &i, s, FLAGFN); err != nil {
 						b.Errorf("expected no error, got %v", err)
 					}
 
@@ -124,7 +129,7 @@ func BenchmarkSteps(b *testing.B) {
 				var s = [3]int{1, 2, 3}
 
 				for b.Loop() {
-					if err := Copy(b.Context(), &i, s, FLAGFN); err != nil {
+					if err := Copy(stateCtx, &i, s, FLAGFN); err != nil {
 						b.Errorf("expected no error, got %v", err)
 					}
 
@@ -137,7 +142,7 @@ func BenchmarkSteps(b *testing.B) {
 	for _, test := range stepTests {
 		b.Run(fmt.Sprintf("TestBaseStep-%T", test.src.Interface()), func(b *testing.B) {
 			for b.Loop() {
-				err := rcopy(b.Context(), test.dst, test.src, []func(*State){FLAGFN})
+				err := rcopy(stateCtx, test.dst, test.src, []func(*State){FLAGFN})
 				if err != nil {
 					b.Error(err)
 					return

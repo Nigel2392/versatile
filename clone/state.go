@@ -15,23 +15,52 @@ type (
 )
 
 const (
-	SF_INVALID             CloneFlag = iota
-	SF_DISABLE_STATE_STEPS CloneFlag = 1 << iota
-
-	SF_SPEED = SF_DISABLE_STATE_STEPS
+	SF_INVALID CloneFlag = iota
+	SF_NOWRAP  CloneFlag = 1 << iota
+	SF_KEEP_POINTERS
 )
 
 type State struct {
 	Flags CloneFlag
 
 	pointers map[oldPtr]newPtr
-	reg      *stepRegistry
+	cache    Registry
 }
 
 func Flag(flag CloneFlag) func(s *State) {
 	return func(s *State) {
 		s.Flags = flag
 	}
+}
+
+type stateContextKey struct{}
+
+func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Context {
+	var (
+		state *State
+		ok    bool
+	)
+
+	if state, ok = StateFromContext(ctx); !ok {
+		state = new(State{
+			pointers: make(map[oldPtr]newPtr),
+			cache:    &cacheRegistry{steps: make(map[any]Step)},
+		})
+
+		// only need to override context when state is not present already
+		ctx = context.WithValue(ctx, stateContextKey{}, state)
+	}
+
+	for _, opt := range opts {
+		opt(state)
+	}
+
+	return ctx
+}
+
+func StateFromContext(ctx context.Context) (*State, bool) {
+	s, ok := ctx.Value(stateContextKey{}).(*State)
+	return s, ok
 }
 
 type value struct {
@@ -50,7 +79,7 @@ func getCacheKey(v reflect.Value) uintptr {
 	}
 }
 
-func (s *State) UnsafeNew(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, ok bool) {
+func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, ok bool) {
 	op := getCacheKey(keyPtr)
 	if v, ok := s.pointers[op]; ok {
 		return reflect.NewAt(newTyp, v), true
@@ -68,33 +97,27 @@ func (s *State) UnsafeNew(keyPtr reflect.Value, dstVal reflect.Value, newTyp ref
 	return n, false
 }
 
-func (s *State) New(oldPtr reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, wasCached bool) {
-	op := getCacheKey(oldPtr)
-	if v, ok := s.pointers[op]; ok {
-		return reflect.NewAt(newTyp, v), true
+func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
+	if newTyp.Kind() == reflect.Interface {
+		newTyp = oldPtr.Type()
 	}
 
-	n := reflect.New(newTyp)
-	s.pointers[op] = n.UnsafePointer()
-	return n, false
-}
-
-func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
 	op := getCacheKey(oldPtr)
 	if v, ok := s.pointers[op]; ok {
 		return reflect.SliceAt(newTyp.Elem(), v, l), true
 	}
 
-	if newTyp.Kind() == reflect.Interface {
-		newTyp = oldPtr.Type()
-	}
-
-	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp {
+	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp && newTyp.Kind() == reflect.Slice {
 		el := dstVal.Elem()
-		el.Grow(l - el.Len())
-		el.SetLen(l)
-		el.SetCap(l)
-		s.pointers[op] = el.UnsafePointer()
+		switch newTyp.Kind() {
+		case reflect.Array:
+			s.pointers[op] = dstVal.UnsafePointer()
+		case reflect.Slice:
+			el.Grow(l - el.Len())
+			el.SetLen(l)
+			el.SetCap(l)
+			s.pointers[op] = el.UnsafePointer()
+		}
 		return el, false
 	}
 
@@ -121,14 +144,21 @@ func (s *State) MakeMap(oldPtr reflect.Value, newTyp reflect.Type, _len int) (ne
 	return n, false
 }
 
+func (s *State) Cache() Registry {
+	if s.cache == nil {
+		return NopRegistry
+	}
+	return s.cache
+}
+
 func (s *State) Step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
 	step, ok := s.__get_step(dstIfSrcElseSrc, src)
 	return stepForState(s, step), ok
 }
 
 func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
-	if s.reg != nil {
-		step, ok := s.reg.Step(dstIfSrcElseSrc, src)
+	if s.cache != nil {
+		step, ok := s.cache.Step(dstIfSrcElseSrc, src)
 		if ok {
 			return step, true
 		}
@@ -147,7 +177,7 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 }
 
 func stepForState(s *State, st Step) Step {
-	if st == nil || s.Flags.Is(SF_DISABLE_STATE_STEPS) {
+	if st == nil || s.Flags.Is(SF_NOWRAP) {
 		return st
 	}
 

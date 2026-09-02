@@ -20,7 +20,7 @@ type StructStep struct {
 }
 
 func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
-	if step, ok := CACHE.Step(dst, src); ok {
+	if step, ok := s.Cache().Step(dst, src); ok {
 		return step, nil
 	}
 
@@ -32,7 +32,7 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 		dstStrct = dst.Elem()
 	}
 
-	CACHE.AddStepType(dst, src, &f) // cache reference to [StructStep]
+	s.Cache().AddStepType(dst, src, &f) // cache reference to [StructStep]
 
 	f.steps = make([]structFieldStep, 0, src.NumField())
 	for sf := range src.Fields() {

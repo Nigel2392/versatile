@@ -117,7 +117,7 @@ type linkedList struct {
 func intPtr(v int) *int { return &v }
 
 func mustCopy(t *testing.T, dst, src any) {
-	FLAGFN := Flag(SF_SPEED)
+	FLAGFN := Flag(SF_NOWRAP)
 	// FLAGFN := Flag(SF_INVALID)
 	t.Helper()
 	if err := Copy(t.Context(), dst, src, FLAGFN); err != nil {
@@ -556,28 +556,6 @@ func TestSharedRef_SliceSameBackingArray(t *testing.T) {
 	}
 	if src.S1[0] == 999 {
 		t.Fatal("original mutated")
-	}
-}
-
-func _TestSharedRef_SliceSubslices(t *testing.T) {
-	backing := []int{10, 20, 30, 40, 50}
-	src := sliceHolder{
-		S1: backing[:3],
-		S2: backing[2:],
-		S3: backing,
-	}
-	var dst sliceHolder
-	mustCopy(t, &dst, src)
-
-	assertDeepEqual(t, "S1 values", dst.S1, []int{10, 20, 30})
-	assertDeepEqual(t, "S2 values", dst.S2, []int{30, 40, 50})
-	assertDeepEqual(t, "S3 values", dst.S3, []int{10, 20, 30, 40, 50})
-
-	// Since S1 and S2 overlap at index [2]/[0], mutating via S3 should
-	// not affect the original.
-	dst.S3[0] = 777
-	if src.S3[0] == 777 {
-		t.Fatal("original mutated via S3")
 	}
 }
 

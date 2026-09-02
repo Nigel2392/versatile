@@ -3,11 +3,17 @@ package clone
 import (
 	"fmt"
 	"reflect"
-	"sync/atomic"
 )
 
-func init() {
-	CACHE.SetEnabled(true)
+type Registry interface {
+	AddStepType(dstIfSrcElseSrc reflect.Type, src ...any)
+	AddStepKind(dstIfSrcElseSrc reflect.Kind, src ...any)
+	Step(dst reflect.Type, src reflect.Type) (Step, bool)
+}
+
+type ResettableRegistry interface {
+	Registry
+	Reset() int
 }
 
 type stepRegistry struct {
@@ -95,36 +101,49 @@ func (r *stepRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
 }
 
 type cacheRegistry struct {
-	enabled atomic.Bool
+	disabled bool
 	stepRegistry
 }
 
-var CACHE = cacheRegistry{
-	steps: make(map[any]Step),
+func (r *cacheRegistry) SetDisabled(b bool) (old bool) {
+	old = r.disabled
+	r.disabled = b
+	return old
 }
 
-func (r *cacheRegistry) SetEnabled(b bool) (old bool) {
-	return r.enabled.Swap(b)
+func (r cacheRegistry) Reset() int {
+	l := len(r.steps)
+	clear(r.steps)
+	return l
 }
 
 func (r *cacheRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, src ...any) {
-	if !r.enabled.Load() {
+	if r.disabled {
 		return
 	}
 	r.stepRegistry.AddStepType(dstIfSrcElseSrc, src...)
 }
 
 func (r *cacheRegistry) AddStepKind(dstIfSrcElseSrc reflect.Kind, src ...any) {
-	if !r.enabled.Load() {
+	if r.disabled {
 		return
 	}
 	r.stepRegistry.AddStepKind(dstIfSrcElseSrc, src...)
 }
 
 func (r *cacheRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
-	if !r.enabled.Load() {
+	if r.disabled {
 		return nil, false
 	}
 
 	return r.stepRegistry.Step(dst, src)
 }
+
+var NopRegistry ResettableRegistry = nopRegistry{}
+
+type nopRegistry struct{}
+
+func (r nopRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, src ...any)      {}
+func (r nopRegistry) AddStepKind(dstIfSrcElseSrc reflect.Kind, src ...any)      {}
+func (r nopRegistry) Step(dst reflect.Type, src reflect.Type) (s Step, ok bool) { return }
+func (r nopRegistry) Reset() (i int)                                            { return }

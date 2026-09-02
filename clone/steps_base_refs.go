@@ -12,16 +12,24 @@ type PointerStep struct {
 }
 
 func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (_ Step, err error) {
-	if step, ok := CACHE.Step(dst, src); ok {
+	if step, ok := s.Cache().Step(dst, src); ok {
 		return step, nil
 	}
 
-	f.step, err = s.StepInit(ctx, dst.Elem(), src.Elem())
-	if err != nil {
-		return f, errors.Wrap(err, "PointerStep.Copy")
+	var dstElem reflect.Type
+	if dst != nil {
+		switch dst.Kind() {
+		case reflect.Pointer, reflect.Slice, reflect.Array, reflect.Map, reflect.Chan:
+			dstElem = dst.Elem()
+		}
 	}
 
-	CACHE.AddStepType(dst, src, f)
+	f.step, err = s.StepInit(ctx, dstElem, src.Elem())
+	if err != nil {
+		return f, errors.Wrap(err, "PointerStep.Init")
+	}
+
+	s.Cache().AddStepType(dst, src, f)
 	return f, nil
 }
 
@@ -40,7 +48,7 @@ func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value)
 		allocTyp = target.Type().Elem()
 	}
 
-	newPtr, cached := s.UnsafeNew(src, target, allocTyp)
+	newPtr, cached := s.New(src, target, allocTyp)
 
 	target.Set(newPtr)
 	if cached {
@@ -59,19 +67,19 @@ func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type
 	cDst := dst
 	cSrc := src
 
-	if src.Kind() == reflect.Interface {
-		cSrc = nil
+	if dst.Kind() == reflect.Interface {
+		cDst = nil
 	}
 
-	if dst.Kind() == reflect.Interface {
-		cDst = cSrc
+	if src.Kind() == reflect.Interface {
+		cSrc = nil
 	}
 
 	if cDst == nil && cSrc == nil {
 		return f, nil
 	}
 
-	if step, ok := CACHE.Step(cDst, cSrc); ok {
+	if step, ok := s.Cache().Step(cDst, cSrc); ok {
 		return step, nil
 	}
 
@@ -80,7 +88,7 @@ func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type
 		return f, errors.Wrap(err, "InterfaceStep.Init")
 	}
 
-	CACHE.AddStepType(cDst, cSrc, f)
+	s.Cache().AddStepType(cDst, cSrc, f)
 	return f, nil
 }
 

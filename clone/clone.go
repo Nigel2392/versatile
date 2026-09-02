@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/Nigel2392/errors"
+	"github.com/Nigel2392/versatile/bitcheck"
 )
 
 type Step interface {
@@ -41,22 +42,30 @@ func CopyT[TYP any, PTR *TYP](ctx context.Context, dst PTR, src TYP, opts ...fun
 }
 
 func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []func(*State)) (err error) {
-	_state := new(State{
-		pointers: make(map[oldPtr]newPtr),
-	})
 
-	// prevents extra alloc
-	state := (*State)(noescape(unsafe.Pointer(_state)))
+	var _state *State
+	var state, ok = StateFromContext(ctx)
+	if !ok {
+		_state = new(State{
+			pointers: make(map[oldPtr]newPtr),
+			cache:    &cacheRegistry{steps: make(map[any]Step)},
+		})
+
+		// prevents extra alloc
+		state = (*State)(noescape(unsafe.Pointer(_state)))
+	}
 
 	// apply customisations to state
 	for _, opt := range opts {
 		opt(state)
 	}
 
-	var (
-		step Step
-		ok   bool
+	if !bitcheck.Is(state.Flags, SF_KEEP_POINTERS) {
+		defer clear(state.pointers)
+	}
 
+	var (
+		step   Step
 		srcTyp = src.Type()
 		dstTyp = dst.Type()
 	)
@@ -111,7 +120,6 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	}
 
 copyStep:
-
 	// initialize step if needed (complex types or custom steps)
 	step, err = initStep(ctx, state, step, dstTyp, srcTyp)
 	if err != nil {
