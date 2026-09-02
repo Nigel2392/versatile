@@ -53,7 +53,7 @@ func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value)
 		return nil
 	}
 
-	return f.step.Copy(ctx, s, newPtr, src.Elem())
+	return s.StepCopy(ctx, f.step, newPtr, src.Elem())
 }
 
 type InterfaceStep struct {
@@ -107,7 +107,7 @@ func (f InterfaceStep) Copy(ctx context.Context, s *State, dst, src reflect.Valu
 	}
 
 	newVal := reflect.New(src.Type())
-	err = f.step.Copy(ctx, s, newVal, src)
+	err = s.StepCopy(ctx, f.step, newVal, src)
 	if err != nil {
 		return errors.Wrap(err, "InterfaceStep.Copy")
 	}

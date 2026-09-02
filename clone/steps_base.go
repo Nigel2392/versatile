@@ -70,8 +70,7 @@ func isSafeConversion(from, to reflect.Type) bool
 type BaseStep struct{}
 
 func (f BaseStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error) {
-
-	if src.AssignableTo(dst) {
+	if src == dst || src.AssignableTo(dst) {
 		return f, nil
 	}
 
@@ -79,35 +78,39 @@ func (f BaseStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (St
 		return f, ErrInvalid.Wrapf("%s is not assignable to %s and conversions are disabled", src, dst)
 	}
 
-	if !src.ConvertibleTo(dst) {
-		return f, ErrInvalid.Wrapf("%s is not convertible to %s", src, dst)
-	}
-
 	if !isSafeConversion(src, dst) {
 		return f, ErrInvalid.Wrapf("%s is not safe to convert to %s", src, dst)
+	}
+
+	if !src.ConvertibleTo(dst) {
+		return f, ErrInvalid.Wrapf("%s is not convertible to %s", src, dst)
 	}
 
 	return f, nil
 }
 
+//go:nocheckptr
 func (f BaseStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error {
 	if d.Kind() == reflect.Pointer {
 		d = d.Elem()
 	}
 
-	if i.Type().AssignableTo(d.Type()) || b.Is(s.Flags, CF_NO_CONVS) {
+	srcTyp := i.Type()
+	dstTyp := d.Type()
+
+	if b.Is(s.Flags, CF_NO_CONVS) || srcTyp == dstTyp || srcTyp.AssignableTo(dstTyp) {
 		d.Set(i)
 		return nil
 	}
 
-	if !isSafeConversion(i.Type(), d.Type()) {
+	if !isSafeConversion(srcTyp, dstTyp) {
 		return ErrInvalid.Wrapf(
 			"invalid conversion detected: %s => %s",
-			i.Type(), d.Type(),
+			srcTyp, dstTyp,
 		)
 	}
 
-	d.Set(i.Convert(d.Type()))
+	d.Set(i.Convert(dstTyp))
 
 	return nil
 }

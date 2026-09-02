@@ -29,7 +29,7 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 		dstStrct = dst
 	}
 
-	s.Cache().AddStepType(dst, src, &f) // cache reference to [StructStep]
+	s.Cache().AddStepType(dst, src, Step(&f)) // cache reference to [StructStep]
 
 	f.steps = make([]structFieldStep, 0, src.NumField())
 	for sf := range src.Fields() {
@@ -80,7 +80,7 @@ func (f StructStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) 
 		addrDst := reflect.NewAt(targetFld.Type(), unsafe.Pointer(targetFld.UnsafeAddr()))
 		addrSrc := reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
 
-		if err := fld.step.Copy(ctx, s, addrDst, addrSrc); err != nil {
+		if err := s.StepCopy(ctx, fld.step, addrDst, addrSrc); err != nil {
 			return errors.Wrapf(err, "StructStep.Copy(%v)", fld.idx)
 		}
 	}

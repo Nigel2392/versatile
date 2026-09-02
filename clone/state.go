@@ -17,6 +17,7 @@ type (
 const (
 	CF_INVALID CloneFlag = iota
 	CF_NOWRAP  CloneFlag = 1 << iota
+	CF_NOVALIDATE
 	CF_KEEP_POINTERS
 	CF_NO_CONVS
 )
@@ -24,6 +25,7 @@ const (
 type State struct {
 	Flags CloneFlag
 
+	wrapStep func(*State, Step) Step
 	pointers map[oldPtr]newPtr
 	cache    ResettableRegistry
 }
@@ -31,6 +33,12 @@ type State struct {
 func Flag(flag CloneFlag) func(s *State) {
 	return func(s *State) {
 		s.Flags = flag
+	}
+}
+
+func WrapStep(fn func(*State, Step) Step) func(s *State) {
+	return func(s *State) {
+		s.wrapStep = fn
 	}
 }
 
@@ -134,14 +142,19 @@ func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp ref
 	return n, false
 }
 
-func (s *State) MakeMap(oldPtr reflect.Value, newTyp reflect.Type, _len int) (newOrCached reflect.Value, wasCached bool) {
-	oldP := oldPtr.Pointer()
-	if v, ok := s.pointers[oldP]; ok {
-		return reflect.NewAt(newTyp, unsafe.Pointer(&v)).Elem(), true
+func (s *State) MakeMap(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, _len int) (newOrCached reflect.Value, wasCached bool) {
+	op := getCacheKey(oldPtr)
+	if v, ok := s.pointers[op]; ok {
+		return reflect.NewAt(newTyp, unsafe.Pointer(v)).Elem(), true
+	}
+
+	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp {
+		s.pointers[op] = dstVal.UnsafePointer()
+		return dstVal, false
 	}
 
 	n := reflect.MakeMapWithSize(newTyp, _len)
-	s.pointers[oldP] = n.UnsafePointer()
+	s.pointers[op] = n.UnsafePointer()
 	return n, false
 }
 
@@ -154,7 +167,12 @@ func (s *State) Cache() ResettableRegistry {
 
 func (s *State) Step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
 	step, ok := s.__get_step(dstIfSrcElseSrc, src)
-	return stepForState(s, step), ok
+
+	if !ok || step == nil || s.Flags.Is(CF_NOWRAP) || s.wrapStep == nil {
+		return step, ok
+	}
+
+	return s.wrapStep(s, step), true
 }
 
 func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
@@ -177,33 +195,9 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 	return initStep(ctx, s, step, dst, src)
 }
 
-func stepForState(s *State, st Step) Step {
-	if st == nil || s.Flags.Is(CF_NOWRAP) {
-		return st
-	}
+func (s *State) StepCopy(ctx context.Context, step Step, dst, src reflect.Value) error {
 
-	switch w := st.(type) {
-	case InitStep:
-		return istateStep{
-			w: w,
-		}
-	}
-
-	return stateStep[Step]{
-		w: st,
-	}
-}
-
-type stateStep[T Step] struct {
-	w T
-}
-
-func (t stateStep[T]) Unwrap() Step {
-	return t.w
-}
-
-func (t stateStep[T]) Copy(ctx context.Context, s *State, dst, src reflect.Value) (err error) {
-	if dst.Kind() != reflect.Pointer && !dst.CanSet() {
+	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && dst.Kind() != reflect.Pointer && !dst.CanSet() {
 		if dst.CanInterface() {
 			dstf := dst.Interface()
 			return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
@@ -213,24 +207,5 @@ func (t stateStep[T]) Copy(ctx context.Context, s *State, dst, src reflect.Value
 		}
 	}
 
-	return t.w.Copy(ctx, s, dst, src)
-}
-
-type istateStep struct {
-	stateStep[InitStep]
-}
-
-func (t istateStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (step Step, err error) {
-	step, err = t.w.Init(ctx, s, dst, src)
-	if step != nil {
-		if i, ok := step.(InitStep); ok {
-			t.w = i
-			step = t
-		} else {
-			step = stateStep[Step]{
-				w: step,
-			}
-		}
-	}
-	return step, err
+	return step.Copy(ctx, s, dst, src)
 }

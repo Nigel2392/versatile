@@ -71,18 +71,26 @@ func (r *stepRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
 		return step, true
 	}
 
-	if dst.Kind() == reflect.Interface || src.Kind() == reflect.Interface {
-		if step, ok := r.steps[reflect.Interface]; ok {
-			return step, true
+	if dst != nil {
+		if dst.Kind() == reflect.Interface && dst.NumMethod() > 0 && (src.Kind() == reflect.Interface || src.AssignableTo(dst) || src.ConvertibleTo(dst)) {
+			if step, ok := r.steps[reflect.Interface]; ok {
+				return step, true
+			}
 		}
+	}
+
+	if src == nil {
+		return nil, false
 	}
 
 	if step, ok := r.steps[src]; ok {
 		return step, true
 	}
 
-	if step, ok := r.steps[duo[reflect.Kind]{dst.Kind(), src.Kind()}]; ok {
-		return step, true
+	if dst != nil {
+		if step, ok := r.steps[duo[reflect.Kind]{dst.Kind(), src.Kind()}]; ok {
+			return step, true
+		}
 	}
 
 	if step, ok := r.steps[src.Kind()]; ok {
