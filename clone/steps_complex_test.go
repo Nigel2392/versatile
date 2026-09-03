@@ -53,7 +53,7 @@ type selfRef struct {
 type mixedRefs struct {
 	Ptr   *inner
 	Slice []*inner
-	// Map   map[string]*inner
+	Map   map[string]*inner
 }
 
 type nestedSlice struct {
@@ -231,22 +231,22 @@ func TestNested_SliceOfSlices(t *testing.T) {
 	}
 }
 
-//	func TestNested_MapOfMaps(t *testing.T) {
-//		src := nestedMap{
-//			Data: map[string]map[string]int{
-//				"a": {"x": 1, "y": 2},
-//				"b": {"z": 3},
-//			},
-//		}
-//		var dst nestedMap
-//		mustCopy(t, &dst, src)
-//
-//		assertDeepEqual(t, "data", dst.Data, src.Data)
-//		dst.Data["a"]["x"] = 999
-//		if src.Data["a"]["x"] == 999 {
-//			t.Fatal("inner map not deeply copied")
-//		}
-//	}
+func TestNested_MapOfMaps(t *testing.T) {
+	src := nestedMap{
+		Data: map[string]map[string]int{
+			"a": {"x": 1, "y": 2},
+			"b": {"z": 3},
+		},
+	}
+	var dst nestedMap
+	mustCopy(t, &dst, src)
+
+	assertDeepEqual(t, "data", dst.Data, src.Data)
+	dst.Data["a"]["x"] = 999
+	if src.Data["a"]["x"] == 999 {
+		t.Fatal("inner map not deeply copied")
+	}
+}
 
 func TestNested_SliceOfPointers(t *testing.T) {
 	a, b, c := 10, 20, 30
@@ -262,56 +262,55 @@ func TestNested_SliceOfPointers(t *testing.T) {
 	}
 }
 
-//	func TestNested_MapOfSlices(t *testing.T) {
-//		src := mapOfSlice{
-//			Data: map[string][]int{
-//				"primes": {2, 3, 5, 7},
-//				"evens":  {2, 4, 6, 8},
-//			},
-//		}
-//		var dst mapOfSlice
-//		mustCopy(t, &dst, src)
-//
-//		assertDeepEqual(t, "data", dst.Data, src.Data)
-//		dst.Data["primes"][0] = 999
-//		if src.Data["primes"][0] == 999 {
-//			t.Fatal("slice inside map not deeply copied")
-//		}
-//	}
-//
-//	func TestNested_SliceOfMaps(t *testing.T) {
-//		src := sliceOfMaps{
-//			Items: []map[string]int{
-//				{"a": 1, "b": 2},
-//				{"c": 3},
-//			},
-//		}
-//		var dst sliceOfMaps
-//		mustCopy(t, &dst, src)
-//
-//		assertDeepEqual(t, "items", dst.Items, src.Items)
-//		dst.Items[0]["a"] = 999
-//		if src.Items[0]["a"] == 999 {
-//			t.Fatal("map inside slice not deeply copied")
-//		}
-//	}
+func TestNested_MapOfSlices(t *testing.T) {
+	src := mapOfSlice{
+		Data: map[string][]int{
+			"primes": {2, 3, 5, 7},
+			"evens":  {2, 4, 6, 8},
+		},
+	}
+	var dst mapOfSlice
+	mustCopy(t, &dst, src)
 
-//	func TestNested_MixedRefsAllFields(t *testing.T) {
-//		shared := &inner{Value: 42, Label: "shared"}
-//		src := mixedRefs{
-//			Ptr:   shared,
-//			Slice: []*inner{shared, {Value: 2}},
-//			Map:   map[string]*inner{"key": shared},
-//		}
-//		var dst mixedRefs
-//		mustCopy(t, &dst, src)
-//
-//		assertDeepEqual(t, "ptr", *dst.Ptr, *src.Ptr)
-//		assertNotSamePtr(t, "ptr", dst.Ptr, src.Ptr)
-//		if len(dst.Slice) != 2 || len(dst.Map) != 1 {
-//			t.Fatalf("wrong lengths: slice=%d, map=%d", len(dst.Slice), len(dst.Map))
-//		}
-//	}
+	assertDeepEqual(t, "data", dst.Data, src.Data)
+	dst.Data["primes"][0] = 999
+	if src.Data["primes"][0] == 999 {
+		t.Fatal("slice inside map not deeply copied")
+	}
+}
+
+func TestNested_SliceOfMaps(t *testing.T) {
+	src := sliceOfMaps{
+		Items: []map[string]int{
+			{"a": 1, "b": 2},
+			{"c": 3},
+		},
+	}
+	var dst sliceOfMaps
+	mustCopy(t, &dst, src)
+
+	assertDeepEqual(t, "items", dst.Items, src.Items)
+	dst.Items[0]["a"] = 999
+	if src.Items[0]["a"] == 999 {
+		t.Fatal("map inside slice not deeply copied")
+	}
+}
+func TestNested_MixedRefsAllFields(t *testing.T) {
+	shared := &inner{Value: 42, Label: "shared"}
+	src := mixedRefs{
+		Ptr:   shared,
+		Slice: []*inner{shared, {Value: 2}},
+		Map:   map[string]*inner{"key": shared},
+	}
+	var dst mixedRefs
+	mustCopy(t, &dst, src)
+
+	assertDeepEqual(t, "ptr", *dst.Ptr, *src.Ptr)
+	assertNotSamePtr(t, "ptr", dst.Ptr, src.Ptr)
+	if len(dst.Slice) != 2 || len(dst.Map) != 1 {
+		t.Fatalf("wrong lengths: slice=%d, map=%d", len(dst.Slice), len(dst.Map))
+	}
+}
 
 func TestNested_InterfaceWithStruct(t *testing.T) {
 	src := ifaceHolder{Face: myStruct{val: "deep"}}
@@ -559,7 +558,7 @@ func TestSharedRef_SliceSameBackingArray(t *testing.T) {
 	}
 }
 
-func _TestSharedRef_MapSamePointerValues(t *testing.T) {
+func TestSharedRef_MapSamePointerValues(t *testing.T) {
 	shared := &inner{Value: 99}
 	src := mapHolder{
 		M1: map[string]*inner{"x": shared, "y": shared},
@@ -733,7 +732,7 @@ func TestSharedRef_LinkedListCycle2(t *testing.T) {
 	}
 }
 
-func _TestSharedRef_MapTwoKeysOneValue(t *testing.T) {
+func TestSharedRef_MapTwoKeysOneValue(t *testing.T) {
 	shared := &inner{Value: 11}
 	src := struct {
 		M map[string]*inner
@@ -860,9 +859,63 @@ func TestSharedRef_MutationIsolation(t *testing.T) {
 	if src.B.Value != 1 || src.B.Label != "original" {
 		t.Fatalf("source B was mutated: %+v", src.B)
 	}
+	if dst.B.Label != "cloned" {
+		t.Fatalf("pointer was not properly copied: %+v %+v", dst, src)
+	}
 }
 
-func _TestSharedRef_MapOfSlicesSharedBacking(t *testing.T) {
+func TestSharedRef_StructOfSlicesSharedBacking(t *testing.T) {
+	backing := []int{1, 2, 3}
+	src := struct {
+		a []int
+		b []int
+	}{
+		a: backing,
+		b: backing,
+	}
+
+	dst := new(struct {
+		a []int
+		b []int
+	})
+	mustCopy(t, &dst, src)
+
+	assertDeepEqual(t, "a", dst.a, backing)
+	assertDeepEqual(t, "b", dst.b, backing)
+
+	dst.a[0] = 999
+	if dst.b[0] != 999 {
+		t.Fatal("shared backing array in map values not preserved")
+	}
+	if backing[0] == 999 {
+		t.Fatal("original mutated")
+	}
+}
+
+func TestSharedRef_MapOfSlicesSharedBacking(t *testing.T) {
+	backing := []int{1, 2, 3}
+	src := map[string][]int{
+		"a": backing,
+		"b": backing,
+	}
+
+	dst := new(make(map[string][]int))
+	mustCopy(t, &dst, src)
+
+	assertDeepEqual(t, "a", (*dst)["a"], backing)
+	assertDeepEqual(t, "b", (*dst)["b"], backing)
+
+	(*dst)["a"][0] = 999
+	if (*dst)["b"][0] != 999 {
+		t.Fatal("shared backing array in map values not preserved")
+	}
+	if backing[0] == 999 {
+		t.Fatal("original mutated")
+	}
+
+}
+
+func TestSharedRef_StructWithMapOfSlicesSharedBacking(t *testing.T) {
 	backing := []int{1, 2, 3}
 	src := struct {
 		M map[string][]int

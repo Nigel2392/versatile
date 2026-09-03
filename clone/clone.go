@@ -168,6 +168,8 @@ var setDirectKinds = func() reflect.Kind {
 	return n
 }()
 
+// isValueType reports wether [reflect.Value.Set] is deemed enough of a clone
+// this reports false for reference types.
 func isValueType(k reflect.Kind) bool {
 	return setDirectKinds&(1<<k) > 0
 }

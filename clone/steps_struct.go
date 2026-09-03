@@ -30,20 +30,12 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 	s.Cache().AddStepType(dst, src, Step(&f)) // cache reference to [StructStep]
 
 	f.steps = make([]structFieldStep, 0, src.NumField())
-	for sf := range src.Fields() {
-		// if !sf.IsExported() {
-		// continue
-		// }
-
+	for sf := range StructFieldsForClone(s, src) {
 		if sf.Tag != "" {
 			tag, ok := sf.Tag.Lookup(STRUCT_TAG)
 			if ok && tag == "-" {
 				continue
 			}
-		}
-
-		if !s.Flags.Is(CF_NOVALIDATE) && !IsAllowedType(sf.Type) {
-			continue
 		}
 
 		dstSfTyp := sf.Type

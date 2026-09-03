@@ -16,9 +16,9 @@ func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) 
 		return step, nil
 	}
 
-	var dstElem reflect.Type
+	var dstElem = dst
 	switch dst.Kind() {
-	case reflect.Pointer, reflect.Slice, reflect.Array, reflect.Map:
+	case reflect.Pointer:
 		dstElem = dst.Elem()
 	}
 

@@ -38,7 +38,6 @@ func (f SliceStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) e
 	}
 
 	newSlice, cached := s.MakeSlice(src, dst, dst.Type().Elem(), srcLen)
-
 	if cached {
 		dst.Elem().Set(newSlice)
 		return nil

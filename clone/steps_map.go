@@ -58,9 +58,9 @@ func (f MapStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) (er
 	}
 
 	newMap, cached := s.MakeMap(src, dst, src.Type(), src.Len())
-	dst.Elem().Set(newMap)
 
 	if cached {
+		dst.Elem().Set(newMap)
 		return nil
 	}
 
@@ -83,8 +83,10 @@ func (f MapStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) (er
 			}
 		}
 
-		dst.SetMapIndex(k, v)
+		newMap.SetMapIndex(k, v)
 	}
+
+	dst.Elem().Set(newMap)
 
 	return nil
 }
@@ -95,8 +97,9 @@ type mapItem struct {
 }
 
 // Copy implementation of Copy function for map item copier
-func (c mapItem) Copy(ctx context.Context, s *State, src reflect.Value) (reflect.Value, error) {
-	dst, _ := s.New(src, reflect.Value{}, c.dstType)
-	err := c.step.Copy(ctx, s, dst, src)
-	return dst, err
+func (c mapItem) Copy(ctx context.Context, s *State, src reflect.Value) (dst reflect.Value, err error) {
+	dst = reflect.New(c.dstType)
+	err = c.step.Copy(ctx, s, dst, src)
+	return dst.Elem(), err
+
 }

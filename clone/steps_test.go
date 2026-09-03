@@ -21,6 +21,15 @@ func newBaseStepTest[T any](expect T, src T) baseStepTest {
 	}
 }
 
+func newBaseMapTest[K comparable, V any](expect, src map[K]V) baseStepTest {
+	dstP := new(make(map[K]V))
+	return baseStepTest{
+		expected: expect,
+		dst:      reflect.ValueOf(dstP),
+		src:      reflect.ValueOf(src),
+	}
+}
+
 func newBaseStepPtrTest[T any](expect T, src T) baseStepTest {
 	var v T
 	var dst = new(T)
@@ -118,6 +127,17 @@ var stepTests = []baseStepTest{
 	newSliceStepTest([]int{1, 2, 3, 4}),
 	newSliceStepTest([]float64{1, 2, 3, 4}),
 	newSliceStepTest([]any{1, 2, 3, 4}),
+
+	newBaseMapTest(
+		map[string]int{
+			"a": 1,
+			"b": 2,
+		},
+		map[string]int{
+			"a": 1,
+			"b": 2,
+		},
+	),
 }
 
 type myFace interface{ StructMethod() string }

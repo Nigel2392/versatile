@@ -62,29 +62,13 @@ func WrapStep(fn func(*State, Step) Step) func(s *State) {
 	}
 }
 
-type value struct {
-	_   uintptr
-	ptr uintptr
-	_   uintptr
-}
-
-func getCacheKey(v reflect.Value) uintptr {
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.UnsafePointer:
-		return v.Pointer()
-	default:
-		op := *(*value)(unsafe.Pointer(&v))
-		return op.ptr
-	}
-}
-
 // Initialize a new reflect.Value of type [newTyp]
 //
 // [keyPtr] is used to generate a cache key to properly clone any references that share the same pointer.
 //
 // If dstVal is a pointer, and it's [Elem] method returns a value of type [newTyp]
 // then [State.New] assumes it is safe to return (and cache) [dstVal].
-func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, ok bool) {
+func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, cached bool) {
 	op := getCacheKey(keyPtr)
 	if v, ok := s.pointers[op]; ok {
 		return reflect.NewAt(newTyp, v), true
@@ -155,12 +139,13 @@ func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp ref
 func (s *State) MakeMap(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, _len int) (newOrCached reflect.Value, wasCached bool) {
 	op := getCacheKey(oldPtr)
 	if v, ok := s.pointers[op]; ok {
-		return reflect.NewAt(newTyp, unsafe.Pointer(v)).Elem(), true
+		return newMapFromPtr(newTyp, unsafe.Pointer(v)), true
 	}
 
-	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && dstVal.Type().Elem() == newTyp {
-		s.pointers[op] = dstVal.UnsafePointer()
-		return dstVal, false
+	if dstVal.Kind() == reflect.Pointer && !dstVal.IsNil() && !dstVal.Elem().IsNil() && dstVal.Type().Elem() == newTyp {
+		el := dstVal.Elem()
+		s.pointers[op] = el.UnsafePointer()
+		return el, false
 	}
 
 	n := reflect.MakeMapWithSize(newTyp, _len)
