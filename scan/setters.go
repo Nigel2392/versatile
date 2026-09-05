@@ -688,7 +688,8 @@ func RScan(dstPtr reflect.Value, src any, flags ScanFlag) (wasSet bool, err erro
 		}
 
 	case reflect.Slice:
-		if dstElemTyp.Elem().Kind() == reflect.Uint8 {
+		kind := dstElemTyp.Elem().Kind()
+		if kind == reflect.Uint8 {
 			switch val := src.(type) {
 			case []byte:
 				*(*[]byte)(ptr) = val
@@ -716,7 +717,7 @@ func RScan(dstPtr reflect.Value, src any, flags ScanFlag) (wasSet bool, err erro
 			}
 		}
 
-		if dstElemTyp.Elem().Kind() == reflect.Int32 {
+		if kind == reflect.Int32 {
 			switch val := src.(type) {
 			case []byte:
 				*(*[]rune)(ptr) = []rune(string(val))

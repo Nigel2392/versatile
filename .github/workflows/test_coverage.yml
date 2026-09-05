@@ -30,7 +30,7 @@ jobs:
         go-version: '1.27'
 
     - name: Generate Report
-      run: go test -coverprofile=coverage.txt
+      run: go test -v -run="." -bench="." -benchmem --failfast -coverprofile "coverage.txt" ./...
 
     - name: Upload Report
       uses: codecov/codecov-action@v5
