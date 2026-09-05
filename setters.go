@@ -73,10 +73,12 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 	//		}
 	//	}
 
-	if dv, ok := src.(driver.Valuer); ok {
-		src, err = dv.Value()
-		if err != nil {
-			return false, err
+	if flags.Is(SF_SQL_SCANNER) {
+		if dv, ok := src.(driver.Valuer); ok {
+			src, err = dv.Value()
+			if err != nil {
+				return false, err
+			}
 		}
 	}
 
@@ -464,7 +466,7 @@ func RScanTo(dstPtr reflect.Value, src any, flags ScanFlag) (wasSet bool, err er
 		dstElemTyp = dstElemVal.Type()
 	)
 
-	if srcTyp == nil || srcV.Kind() == reflect.Invalid {
+	if srcTyp == nil {
 		setZero(dstPtr)
 		return true, nil
 	}
@@ -813,7 +815,8 @@ func ConvertToUniformType(val any) any {
 		[]rune,
 		string,
 		bool,
-		time.Time:
+		time.Time,
+		uuid.UUID:
 		return v
 
 	case int:
@@ -838,9 +841,6 @@ func ConvertToUniformType(val any) any {
 		return float64(v)
 	case complex64:
 		return complex128(v)
-
-	case uuid.UUID:
-		return v
 
 	case interface{ Time() time.Time }:
 		// see queries/src/drivers/types.go time types

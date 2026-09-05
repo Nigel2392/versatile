@@ -3,6 +3,7 @@ package versatile
 import (
 	"reflect"
 	"testing"
+	"uuid"
 )
 
 type benchInt int
@@ -27,7 +28,7 @@ func benchScanTo[T any](b *testing.B, src any) {
 	var dest T
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ScanTo(&dest, src, SF_DEFAULT)
+		ScanTo(&dest, src, SF_NONE)
 	}
 }
 
@@ -36,7 +37,7 @@ func benchRScanTo[T any](b *testing.B, src any) {
 	destV := reflect.ValueOf(&dest)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		RScanTo(destV, src, SF_DEFAULT)
+		RScanTo(destV, src, SF_NONE)
 	}
 }
 
@@ -58,6 +59,7 @@ func BenchmarkScanTo(b *testing.B) {
 	b.Run("bool", func(b *testing.B) { benchScanTo[bool](b, true) })
 	b.Run("bytes", func(b *testing.B) { benchScanTo[[]byte](b, []byte("test")) })
 	b.Run("runes", func(b *testing.B) { benchScanTo[[]rune](b, []rune("test")) })
+	b.Run("uuid", func(b *testing.B) { benchScanTo[uuid.UUID](b, uuid.Max()) })
 
 	b.Run("benchInt", func(b *testing.B) { benchScanTo[benchInt](b, int64(1)) })
 	b.Run("benchInt8", func(b *testing.B) { benchScanTo[benchInt8](b, int64(1)) })
@@ -96,6 +98,7 @@ func BenchmarkRScanTo(b *testing.B) {
 	b.Run("bool", func(b *testing.B) { benchRScanTo[bool](b, true) })
 	b.Run("bytes", func(b *testing.B) { benchRScanTo[[]byte](b, []byte("test")) })
 	b.Run("runes", func(b *testing.B) { benchRScanTo[[]rune](b, []rune("test")) })
+	b.Run("uuid", func(b *testing.B) { benchScanTo[uuid.UUID](b, uuid.Max()) })
 
 	b.Run("benchInt", func(b *testing.B) { benchRScanTo[benchInt](b, int64(1)) })
 	b.Run("benchInt8", func(b *testing.B) { benchRScanTo[benchInt8](b, int64(1)) })
