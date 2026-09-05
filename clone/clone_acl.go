@@ -144,6 +144,57 @@ func (a AllowList) Value(ctx context.Context, val reflect.Value) bool {
 	return allows
 }
 
+// 1: allowed
+// 0: unsure
+// -1: block
+func (a AllowList) _allowsCloneType(t reflect.Type, setCache bool) allowFlag {
+
+	var (
+		orig = t
+		fL   []ClonableCheckTypeFunc
+	)
+
+checkTypes:
+	if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
+		return 1 // is literal any
+	}
+
+	allows, ok := a.knownTypes[t]
+	if ok {
+		return boolFlag(allows)
+	}
+
+	if fL == nil {
+		fL = a.hooks.Get[ClonableCheckTypeFunc](_typCheckIdentifier)
+	}
+
+	if len(fL) == 0 {
+		return _unknown
+	}
+
+	for _, check := range fL {
+		if check(t) { // always set cache, even if [t] is [interface{}]
+			a.knownTypes[orig] = false
+			return _false
+		}
+	}
+
+	switch t.Kind() {
+	case reflect.Pointer, reflect.Slice, reflect.Array:
+		t = t.Elem()
+		goto checkTypes
+	}
+
+	if setCache && orig.Kind() != reflect.Interface {
+		a.knownTypes[orig] = true
+	}
+
+	return _true
+}
+
+// 1: allowed
+// 0: unsure
+// -1: block
 func (a AllowList) _allowsCloneValue(_ context.Context, typ reflect.Type, val reflect.Value, fL iter.Seq[ClonableCheckValueFunc]) allowFlag {
 	orig := typ
 checkValue:
@@ -195,52 +246,4 @@ checkValue:
 	}
 
 	return allowFlag
-}
-
-// 1: allowed
-// 0: unsure
-// -1: block
-func (a AllowList) _allowsCloneType(t reflect.Type, setCache bool) allowFlag {
-
-	var (
-		orig = t
-		fL   []ClonableCheckTypeFunc
-	)
-
-checkTypes:
-	if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
-		return 1 // is literal any
-	}
-
-	allows, ok := a.knownTypes[t]
-	if ok {
-		return boolFlag(allows)
-	}
-
-	if fL == nil {
-		fL = a.hooks.Get[ClonableCheckTypeFunc](_typCheckIdentifier)
-	}
-
-	if len(fL) == 0 {
-		return _unknown
-	}
-
-	for _, check := range fL {
-		if check(t) { // always set cache, even if [t] is [interface{}]
-			a.knownTypes[orig] = false
-			return _false
-		}
-	}
-
-	switch t.Kind() {
-	case reflect.Pointer, reflect.Slice, reflect.Array:
-		t = t.Elem()
-		goto checkTypes
-	}
-
-	if setCache && orig.Kind() != reflect.Interface {
-		a.knownTypes[orig] = true
-	}
-
-	return _true
 }

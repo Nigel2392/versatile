@@ -60,9 +60,10 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 		}
 	}
 
-	anyDest = any(*dstPtr) // could be pointer already???
+chkDst:
+	chkPtr := any(*dstPtr) // could be pointer already???
 	if flags.Is(SF_SQL_SCANNER) {
-		if scanner, ok := anyDest.(sql.Scanner); ok {
+		if scanner, ok := chkPtr.(sql.Scanner); ok {
 			err := scanner.Scan(ConvertToUniformType(src))
 			return err == nil, err
 		}
@@ -81,6 +82,10 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 	}
 
 	switch this := anyDest.(type) {
+	case *interface{}:
+		anyDest = *this
+		goto chkDst
+
 	case *int:
 		switch val := ConvertToUniformType(src).(type) {
 		case int64:
@@ -397,10 +402,6 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 				}
 			}
 		}
-
-	case *any:
-		*this = src
-		wasSet = true
 	}
 
 	if wasSet {
