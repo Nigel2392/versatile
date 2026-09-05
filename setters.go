@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 	"unsafe"
+	"uuid"
 
 	"github.com/Nigel2392/versatile/bitcheck"
 	"golang.org/x/exp/constraints"
@@ -64,13 +65,13 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 		}
 	}
 
-	chkPtr := any(*dstPtr) // could be pointer already???
-	if flags.Is(SF_SQL_SCANNER) {
-		if scanner, ok := chkPtr.(sql.Scanner); ok {
-			err := scanner.Scan(ConvertToUniformType(src))
-			return err == nil, err
-		}
-	}
+	//	chkPtr := any(*dstPtr) // could be pointer already???
+	//	if flags.Is(SF_SQL_SCANNER) {
+	//		if scanner, ok := chkPtr.(sql.Scanner); ok {
+	//			err := scanner.Scan(ConvertToUniformType(src))
+	//			return err == nil, err
+	//		}
+	//	}
 
 	if dv, ok := src.(driver.Valuer); ok {
 		src, err = dv.Value()
@@ -401,6 +402,41 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 				}
 			}
 		}
+
+	case *uuid.UUID:
+		switch val := src.(type) {
+		case uuid.UUID:
+			*this = val
+			wasSet = true
+		case []byte:
+			if flags.Is(SF_STRCONV) {
+				*this, err = uuid.Parse(string(val))
+				wasSet = true
+			}
+		case string:
+			if flags.Is(SF_STRCONV) {
+				*this, err = uuid.Parse(val)
+				wasSet = true
+			}
+		}
+		if !wasSet {
+			switch val := ConvertToUniformType(src).(type) {
+			case uuid.UUID:
+				*this = val
+				wasSet = true
+			case []byte:
+				if flags.Is(SF_STRCONV) {
+					*this, err = uuid.Parse(string(val))
+					wasSet = true
+				}
+			case string:
+				if flags.Is(SF_STRCONV) {
+					*this, err = uuid.Parse(val)
+					wasSet = true
+				}
+			}
+		}
+
 	}
 
 	if wasSet {
@@ -802,6 +838,9 @@ func ConvertToUniformType(val any) any {
 		return float64(v)
 	case complex64:
 		return complex128(v)
+
+	case uuid.UUID:
+		return v
 
 	case interface{ Time() time.Time }:
 		// see queries/src/drivers/types.go time types
