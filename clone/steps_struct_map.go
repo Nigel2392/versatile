@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/Nigel2392/tags"
+	"github.com/Nigel2392/versatile/internal/danger"
 )
 
 // struct => map
@@ -29,7 +30,7 @@ func (m StructToMapStep) Init(ctx context.Context, s *State, dst, src reflect.Ty
 			structField.tags = tags.ParseTags(tag)
 		}
 
-		if !isValueType(sf.Type.Kind()) {
+		if !danger.IsValueType(sf.Type.Kind()) {
 			step, err = s.StepInit(ctx, sf.Type, sf.Type)
 			if err != nil {
 				return m, err

@@ -1,10 +1,13 @@
-package versatile
+package scan
 
 import (
 	"database/sql/driver"
 	"reflect"
 	"testing"
 )
+
+type customString string
+type customInt int
 
 type testScanner struct {
 	val any
@@ -59,7 +62,7 @@ func TestConvertToUniformType(t *testing.T) {
 	}
 }
 
-func TestScanTo_BasicTypes(t *testing.T) {
+func TestScan_BasicTypes(t *testing.T) {
 	runesDest := []rune("old")
 	bytesDest := []byte("old")
 	strDest := "old"
@@ -130,49 +133,49 @@ func TestScanTo_BasicTypes(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		ok, err := ScanTo(&c.dst, c.src, SF_DEFAULT)
+		ok, err := Scan(&c.dst, c.src, SF_DEFAULT)
 		if !ok || err != nil {
-			t.Errorf("ScanTo(%T, %T) failed: ok=%v, err=%v", c.dst, c.src, ok, err)
+			t.Errorf("Scan(%T, %T) failed: ok=%v, err=%v", c.dst, c.src, ok, err)
 		}
 		val := reflect.ValueOf(c.dst).Elem().Interface()
 		if !reflect.DeepEqual(val, c.expect) {
-			t.Errorf("ScanTo(%T, %T) == %v, want %v (%T %T)", c.dst, c.src, val, c.expect, val, c.expect)
+			t.Errorf("Scan(%T, %T) == %v, want %v (%T %T)", c.dst, c.src, val, c.expect, val, c.expect)
 		}
 	}
 }
 
-func TestScanTo_SpecialCases(t *testing.T) {
+func TestScan_SpecialCases(t *testing.T) {
 	// any pointer
 	var anyDest any
-	ok, err := ScanTo(&anyDest, "test", SF_DEFAULT)
+	ok, err := Scan(&anyDest, "test", SF_DEFAULT)
 	if !ok || err != nil || anyDest != "test" {
-		t.Errorf("ScanTo(*any) failed")
+		t.Errorf("Scan(*any) failed")
 	}
 
 	// SQL Scanner
 	var ts testScanner
-	ok, err = ScanTo(&ts, "test", SF_DEFAULT)
+	ok, err = Scan(&ts, "test", SF_DEFAULT)
 	if !ok || err != nil || ts.val != "test" {
-		t.Errorf("ScanTo(sql.Scanner) failed")
+		t.Errorf("Scan(sql.Scanner) failed")
 	}
 
 	// driver.Valuer
 	var intDest int
 	dv := driverValuer{val: int64(42)}
-	ok, err = ScanTo(&intDest, dv, SF_DEFAULT)
+	ok, err = Scan(&intDest, dv, SF_DEFAULT)
 	if !ok || err != nil || intDest != 42 {
-		t.Errorf("ScanTo from driver.Valuer failed")
+		t.Errorf("Scan from driver.Valuer failed")
 	}
 
 	// nil source
 	intDest = 42
-	ok, err = ScanTo(&intDest, nil, SF_DEFAULT)
+	ok, err = Scan(&intDest, nil, SF_DEFAULT)
 	if !ok || err != nil || intDest != 0 {
-		t.Errorf("ScanTo with nil source failed")
+		t.Errorf("Scan with nil source failed")
 	}
 }
 
-func TestRScanTo_BasicTypes(t *testing.T) {
+func TestRScan_BasicTypes(t *testing.T) {
 	runesDest := []rune("old")
 	bytesDest := []byte("old")
 	strDest := "old"
@@ -242,29 +245,29 @@ func TestRScanTo_BasicTypes(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		ok, err := RScanTo(reflect.ValueOf(c.dst), c.src, SF_DEFAULT)
+		ok, err := RScan(reflect.ValueOf(c.dst), c.src, SF_DEFAULT)
 		if !ok || err != nil {
-			t.Errorf("RScanTo(%T, %T) failed: ok=%v, err=%v", c.dst, c.src, ok, err)
+			t.Errorf("RScan(%T, %T) failed: ok=%v, err=%v", c.dst, c.src, ok, err)
 		}
 		val := reflect.ValueOf(c.dst).Elem().Interface()
 		if !reflect.DeepEqual(val, c.expect) {
-			t.Errorf("RScanTo(%T, %T) == %v, want %v", c.dst, c.src, val, c.expect)
+			t.Errorf("RScan(%T, %T) == %v, want %v", c.dst, c.src, val, c.expect)
 		}
 	}
 }
 
-func TestRScanTo_SpecialCases(t *testing.T) {
+func TestRScan_SpecialCases(t *testing.T) {
 	// nil source
 	var intDest int = 42
-	ok, err := RScanTo(reflect.ValueOf(&intDest), nil, SF_DEFAULT)
+	ok, err := RScan(reflect.ValueOf(&intDest), nil, SF_DEFAULT)
 	if !ok || err != nil || intDest != 0 {
-		t.Errorf("RScanTo with nil source failed")
+		t.Errorf("RScan with nil source failed")
 	}
 
 	// Convertible source
 	var ci customInt
-	ok, err = RScanTo(reflect.ValueOf(&ci), int(42), SF_DEFAULT)
+	ok, err = RScan(reflect.ValueOf(&ci), int(42), SF_DEFAULT)
 	if !ok || err != nil || ci != 42 {
-		t.Errorf("RScanTo convertible type failed")
+		t.Errorf("RScan convertible type failed")
 	}
 }

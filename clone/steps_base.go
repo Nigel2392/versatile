@@ -5,10 +5,7 @@ import (
 	"reflect"
 
 	b "github.com/Nigel2392/versatile/bitcheck"
-
-	_ "unsafe"
-
-	_ "github.com/Nigel2392/versatile"
+	"github.com/Nigel2392/versatile/internal/danger"
 )
 
 type FuncStep func(s *State, dst, src reflect.Value) error
@@ -28,7 +25,7 @@ func (f BaseStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (St
 		return f, ErrInvalid.Wrapf("%s is not assignable to %s and conversions are disabled", src, dst)
 	}
 
-	if !isSafeConversion(src, dst) {
+	if !danger.IsSafeConversion(src, dst) {
 		return f, ErrInvalid.Wrapf("%s is not safe to convert to %s", src, dst)
 	}
 
@@ -52,7 +49,7 @@ func (f BaseStep) Copy(ctx context.Context, s *State, d, i reflect.Value) error 
 		return nil
 	}
 
-	if !isSafeConversion(srcTyp, dstTyp) {
+	if !danger.IsSafeConversion(srcTyp, dstTyp) {
 		return ErrInvalid.Wrapf(
 			"invalid conversion detected: %s => %s",
 			srcTyp, dstTyp,

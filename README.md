@@ -117,14 +117,14 @@ func main() {
 
 ### Dynamic Setters
 
-`ScanTo` sets a value into a destination pointer, parsing and converting the source data as required based on the provided flags (`SF_SQL_SCANNER`, `SF_STRCONV`, `SF_REFLECTCONV`).
+`Scan` sets a value into a destination pointer, parsing and converting the source data as required based on the provided flags (`SF_SQL_SCANNER`, `SF_STRCONV`, `SF_REFLECTCONV`).
 
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/Nigel2392/versatile"
+    "github.com/Nigel2392/versatile/scan"
 )
 
 func main() {
@@ -134,19 +134,19 @@ func main() {
     var dstBytes []byte
 
     // Parse a string directly into an int pointer
-    versatile.ScanTo(&dstInt, "123", versatile.SF_STRCONV)
+    scan.Scan(&dstInt, "123", scan.SF_STRCONV)
     fmt.Println(dstInt) // 123
 
     // Parse strings to booleans
-    versatile.ScanTo(&dstBool, "true", versatile.SF_STRCONV)
+    scan.Scan(&dstBool, "true", scan.SF_STRCONV)
     fmt.Println(dstBool) // true
 
     // Number to Float conversions
-    versatile.ScanTo(&dstFloat, 123, versatile.SF_DEFAULT)
+    scan.Scan(&dstFloat, 123, scan.SF_DEFAULT)
     fmt.Println(dstFloat) // 123.0
 
     // String to byte slice
-    versatile.ScanTo(&dstBytes, "hello", versatile.SF_DEFAULT)
+    scan.Scan(&dstBytes, "hello", scan.SF_DEFAULT)
     fmt.Println(string(dstBytes)) // "hello"
 }
 ```

@@ -15,7 +15,7 @@ import (
 func BenchmarkCast_Regular_ExactMatch_Creation(b *testing.B) {
 	src := func(a int, s string) int { return a + len(s) }
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = versatile.CastFunc[func(int, string) int](src)
 	}
 }
@@ -24,7 +24,7 @@ func BenchmarkCast_Regular_ExactMatch_Execution(b *testing.B) {
 	src := func(a int, s string) int { return a + len(s) }
 	out, _ := versatile.CastFunc[func(int, string) int](src)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(5, "hello")
 	}
 }
@@ -32,7 +32,7 @@ func BenchmarkCast_Regular_ExactMatch_Execution(b *testing.B) {
 func BenchmarkCast_Regular_Convertible_Creation(b *testing.B) {
 	src := func(a int32, b float32) float64 { return float64(a) + float64(b) }
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = versatile.CastFunc[func(int, float64) float64](src)
 	}
 }
@@ -41,7 +41,7 @@ func BenchmarkCast_Regular_Convertible_Execution(b *testing.B) {
 	src := func(a int32, b float32) float64 { return float64(a) + float64(b) }
 	out, _ := versatile.CastFunc[func(int, float64) float64](src)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(10, 5.5)
 	}
 }
@@ -56,7 +56,7 @@ func BenchmarkCast_Regular_Variadic_Execution(b *testing.B) {
 	}
 	out, _ := versatile.CastFunc[func(int, int, int) int](src)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(1, 2, 3)
 	}
 }
@@ -69,7 +69,7 @@ func BenchmarkCast_Interface_AnyToAny_Execution(b *testing.B) {
 	src := func(a any) any { return a }
 	out, _ := versatile.CastFunc[func(any) any](src)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(42)
 	}
 }
@@ -83,7 +83,7 @@ func BenchmarkCast_Interface_SpecificToAny_Execution(b *testing.B) {
 	}
 	out, _ := versatile.CastFunc[func(int) int](src)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(21)
 	}
 }
@@ -92,7 +92,7 @@ func BenchmarkCast_Interface_AnyToSpecific_Execution(b *testing.B) {
 	src := func(a int) int { return a * 2 }
 	out, _ := versatile.CastFunc[func(any) int](src)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(21)
 	}
 }
@@ -105,7 +105,7 @@ func BenchmarkCast_Interface_StringerToBroad_Execution(b *testing.B) {
 	d := dummyBroadStringer{val: "bench"}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(d)
 	}
 }
@@ -126,7 +126,7 @@ func BenchmarkCast_Interface_MethodUnwrap_Execution(b *testing.B) {
 	dw := bDummyWriter{}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(dw)
 	}
 }
@@ -135,7 +135,7 @@ func BenchmarkCast_Wrapper_Context_Creation(b *testing.B) {
 	ctx := context.Background()
 	src := func(ctx context.Context, a int) int { return a * 2 }
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = versatile.CastFunc[func(int) int](src, versatile.WithContext(ctx))
 	}
 }
@@ -145,7 +145,7 @@ func BenchmarkCast_Wrapper_Context_Execution(b *testing.B) {
 	src := func(ctx context.Context, a int) int { return a * 2 }
 	out, _ := versatile.CastFunc[func(int) int](src, versatile.WithContext(ctx))
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(5)
 	}
 }
@@ -155,7 +155,7 @@ func BenchmarkCast_Wrapper_Context_NoReturns_Execution(b *testing.B) {
 	src := func(ctx context.Context) {}
 	out, _ := versatile.CastFunc[func()](src, versatile.WithContext(ctx))
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		out()
 	}
 }
@@ -169,7 +169,7 @@ func BenchmarkCast_Wrapper_Method_Execution(b *testing.B) {
 	m := &bModel{}
 	saveFn, _ := versatile.Method[func() error](m, "Save", versatile.WithContext(ctx))
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = saveFn()
 	}
 }
@@ -181,7 +181,7 @@ func BenchmarkCast_Wrapper_Context_MultiReturn_Execution(b *testing.B) {
 	// Cast down to error (dropping the string and int)
 	out, _ := versatile.CastFunc[func(string) error](src, versatile.WithContext(ctx))
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out("test")
 	}
 }
@@ -191,7 +191,7 @@ func BenchmarkCast_Wrapper_Context_DestTakesContext1_Execution(b *testing.B) {
 	src := func(ctx context.Context, a int) int { return a * 2 }
 	out, _ := versatile.CastFunc[func(context.Context, int) int](src, versatile.WithContext(ctx))
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(context.Background(), 5)
 	}
 }
@@ -201,7 +201,7 @@ func BenchmarkCast_Wrapper_Context_DestTakesContext2_Execution(b *testing.B) {
 	src := func(ctx context.Context, s string) (string, error) { return s, nil }
 	out, _ := versatile.CastFunc[func(context.Context, any) any](src, versatile.WithContext(ctx))
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = out(context.Background(), "test")
 	}
 }

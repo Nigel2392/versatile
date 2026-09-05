@@ -10,13 +10,8 @@ import (
 	goerrors "errors"
 
 	"github.com/Nigel2392/errors"
+	"github.com/Nigel2392/versatile/internal/danger"
 )
-
-//go:nosplit
-func noescape(p unsafe.Pointer) unsafe.Pointer {
-	x := uintptr(p)
-	return unsafe.Pointer(x ^ 0)
-}
 
 type Function = interface{} // func(...interface{}) -> Component
 
@@ -119,7 +114,7 @@ outer:
 				continue outer
 			}
 
-			if (isSafeConversion(rIn, l) && l.ConvertibleTo(rIn)) || (l.Kind() == reflect.Interface && rIn.ConvertibleTo(l)) {
+			if (danger.IsSafeConversion(rIn, l) && l.ConvertibleTo(rIn)) || (l.Kind() == reflect.Interface && rIn.ConvertibleTo(l)) {
 				convertibles[rIn] = l
 				foundTypes++
 				continue outer
@@ -451,7 +446,7 @@ func RCastFunc(out reflect.Type, fn any, opts ...func(*FuncConfig)) (reflect.Val
 	var function = func(in []reflect.Value) []reflect.Value {
 		callIn := make([]reflect.Value, 0, expectedCallInLength)
 		// safe because callIn doesn't live past this function
-		callInPtr := (*[]reflect.Value)(noescape(unsafe.Pointer(&callIn)))
+		callInPtr := (*[]reflect.Value)(danger.Noescape(unsafe.Pointer(&callIn)))
 		argBuilder(in, callInPtr)
 		return retConverter(fnVal.Call(callIn))
 	}

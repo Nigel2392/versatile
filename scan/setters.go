@@ -1,4 +1,4 @@
-package versatile
+package scan
 
 import (
 	"database/sql"
@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/Nigel2392/versatile/bitcheck"
+	"github.com/Nigel2392/versatile/internal/danger"
 	"golang.org/x/exp/constraints"
 )
 
@@ -51,7 +52,7 @@ func setUnsafePtr[OUT any](ptr unsafe.Pointer, val OUT, err error) (bool, error)
 	return true, nil
 }
 
-func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error) {
+func Scan[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error) {
 
 	var anyDest = any(dstPtr)
 	if v, ok := anyDest.(*interface{}); ok {
@@ -449,10 +450,10 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 		return false, err
 	}
 
-	return RScanTo(reflect.ValueOf(dstPtr), src, flags)
+	return RScan(reflect.ValueOf(dstPtr), src, flags)
 }
 
-func RScanTo(dstPtr reflect.Value, src any, flags ScanFlag) (wasSet bool, err error) {
+func RScan(dstPtr reflect.Value, src any, flags ScanFlag) (wasSet bool, err error) {
 
 	if src == nil {
 		setZero(dstPtr)
@@ -882,13 +883,9 @@ func ConvertToUniformType(val any) any {
 		}
 
 		if elem.Kind() == reflect.Int32 {
-			return fastRunes(rv)
+			return danger.UnsafeRunes(rv)
 		}
 	}
 
 	return val
-}
-
-func fastRunes(rv reflect.Value) []rune {
-	return unsafe.Slice((*rune)(rv.UnsafePointer()), rv.Len())
 }

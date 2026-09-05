@@ -10,6 +10,7 @@ import (
 
 	"github.com/Nigel2392/goldcrest"
 	"github.com/Nigel2392/versatile/bitcheck"
+	"github.com/Nigel2392/versatile/internal/danger"
 )
 
 type FLAG_EQ = bitcheck.Flag
@@ -51,10 +52,10 @@ func RegisterCompareStep(order int, step func(*EqStepState) (eq bool, ok bool)) 
 const (
 	_EQ_HOOK = "versatile.Equals"
 
-	EQ_NONE ScanFlag = 0
+	EQ_NONE bitcheck.Flag = 0
 
 	// convert x and y to driver.Value
-	EQ_DRIVER_VALUE ScanFlag = 1 << iota
+	EQ_DRIVER_VALUE bitcheck.Flag = 1 << iota
 
 	// check for IsZero method on both
 	// special case when x and y are of kinds Array, Slice, Map, Chan:
@@ -203,7 +204,7 @@ func equalsStepped(a, b any, opts FLAG_EQ, steps []equalsStep) bool {
 	}
 
 	// safe because state does not live past this function
-	statePtr := (*EqStepState)(noescape(unsafe.Pointer(state)))
+	statePtr := (*EqStepState)(danger.Noescape(unsafe.Pointer(state)))
 
 	for _, step := range steps {
 		eq, ok := step(statePtr)
@@ -288,15 +289,15 @@ func EQ_BYTES_RUNES(state *EqStepState) (eq bool, ok bool) {
 
 	case v1TE.Kind() == re.Int32 && v2TE.Kind() == re.Int32:
 		// []rune == []rune
-		return string(fastRunes(state.V1)) == string(fastRunes(state.V2)), true
+		return string(danger.UnsafeRunes(state.V1)) == string(danger.UnsafeRunes(state.V2)), true
 
 	case v1TE.Kind() == re.Uint8 && v2TE.Kind() == re.Int32:
 		// []byte == []rune
-		return string(state.V1.Bytes()) == string(fastRunes(state.V2)), true
+		return string(state.V1.Bytes()) == string(danger.UnsafeRunes(state.V2)), true
 
 	case v2TE.Kind() == re.Uint8 && v1TE.Kind() == re.Int32:
 		// []rune == []byte
-		return string(fastRunes(state.V1)) == string(state.V1.Bytes()), true
+		return string(danger.UnsafeRunes(state.V1)) == string(state.V1.Bytes()), true
 	}
 
 	return false, false
@@ -371,9 +372,9 @@ func EQ_TYPES_OPT_CNV(state *EqStepState) (eq, retEq bool) {
 		// convert types (example, int8 -> int64)
 		if state.V1.Kind() != state.V2.Kind() {
 			switch {
-			case isSafeConversion(v1T, v2T) && v1T.ConvertibleTo(v2T):
+			case danger.IsSafeConversion(v1T, v2T) && v1T.ConvertibleTo(v2T):
 				state.V1 = state.V1.Convert(v2T)
-			case isSafeConversion(v2T, v1T) && v2T.ConvertibleTo(v1T):
+			case danger.IsSafeConversion(v2T, v1T) && v2T.ConvertibleTo(v1T):
 				state.V2 = state.V2.Convert(v1T)
 			}
 		}

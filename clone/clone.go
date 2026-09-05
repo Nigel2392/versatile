@@ -8,6 +8,7 @@ import (
 
 	"github.com/Nigel2392/errors"
 	"github.com/Nigel2392/versatile/bitcheck"
+	"github.com/Nigel2392/versatile/internal/danger"
 )
 
 var (
@@ -71,7 +72,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	}
 
 	// prevents extra alloc (prevent state escapes to heap)
-	state = (*State)(noescape(unsafe.Pointer(_state)))
+	state = (*State)(danger.Noescape(unsafe.Pointer(_state)))
 
 	// apply customisations to state
 	for _, opt := range opts {
@@ -144,32 +145,4 @@ func initStep(ctx context.Context, state *State, step Step, dst, src reflect.Typ
 		step, err = i.Init(ctx, state, dst, src)
 	}
 	return step, err
-}
-
-var setDirectKinds = func() reflect.Kind {
-	var n reflect.Kind
-	n |= 1 << reflect.Bool
-	n |= 1 << reflect.String
-	n |= 1 << reflect.Int
-	n |= 1 << reflect.Int8
-	n |= 1 << reflect.Int16
-	n |= 1 << reflect.Int32
-	n |= 1 << reflect.Int64
-	n |= 1 << reflect.Uint
-	n |= 1 << reflect.Uint8
-	n |= 1 << reflect.Uint16
-	n |= 1 << reflect.Uint32
-	n |= 1 << reflect.Uint64
-	n |= 1 << reflect.Float32
-	n |= 1 << reflect.Float64
-	n |= 1 << reflect.Complex64
-	n |= 1 << reflect.Complex128
-	n |= 1 << reflect.Uintptr
-	return n
-}()
-
-// isValueType reports wether [reflect.Value.Set] is deemed enough of a clone
-// this reports false for reference types.
-func isValueType(k reflect.Kind) bool {
-	return setDirectKinds&(1<<k) > 0
 }

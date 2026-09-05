@@ -3,6 +3,8 @@ package clone
 import (
 	"context"
 	"reflect"
+
+	"github.com/Nigel2392/versatile/internal/danger"
 )
 
 // map => map/interface
@@ -24,7 +26,7 @@ func (m MapStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (ste
 	dstKey := dstTyp.Key()
 	dstElem := dstTyp.Elem()
 
-	if !isValueType(srcKey.Kind()) || !isValueType(dstKey.Kind()) || !srcKey.AssignableTo(dstKey) {
+	if !danger.IsValueType(srcKey.Kind()) || !danger.IsValueType(dstKey.Kind()) || !srcKey.AssignableTo(dstKey) {
 		step, err = s.StepInit(ctx, dstKey, srcKey)
 		if err != nil {
 			return nil, err
@@ -36,7 +38,7 @@ func (m MapStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (ste
 		}
 	}
 
-	if !isValueType(srcElem.Kind()) || !isValueType(dstElem.Kind()) || !srcElem.AssignableTo(dstElem) {
+	if !danger.IsValueType(srcElem.Kind()) || !danger.IsValueType(dstElem.Kind()) || !srcElem.AssignableTo(dstElem) {
 		step, err = s.StepInit(ctx, dstElem, srcElem)
 		if err != nil {
 			return nil, err
