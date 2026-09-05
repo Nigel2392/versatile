@@ -50,13 +50,18 @@ func (f StructToMapStep) Copy(ctx context.Context, s *State, dst, src reflect.Va
 		return nil
 	}
 
+	if !src.CanAddr() {
+		copyVal := reflect.New(src.Type()).Elem()
+		copyVal.Set(src)
+		src = copyVal
+	}
+
 	for _, fld := range f.fields {
-		var (
-			key       = fld.Name
-			srcFld    = src.FieldByIndex(fld.Index)
-			srcFldVal = reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
-			val, err  = fld.Copy(ctx, s, srcFldVal)
-		)
+		key := fld.Name
+		srcFld := src.FieldByIndex(fld.StructField.Index)
+		srcFldVal := reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
+		val, err := fld.Copy(ctx, s, srcFldVal)
+
 		if err != nil {
 			return err
 		}

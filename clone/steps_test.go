@@ -11,6 +11,7 @@ type baseStepTest struct {
 	expected any
 	dst      reflect.Value
 	src      reflect.Value
+	equal    func(a, b any) bool
 }
 
 func newBaseStepTest[T any](expect T, src T) baseStepTest {
@@ -27,6 +28,16 @@ func newBaseMapTest[K comparable, V any](expect, src map[K]V) baseStepTest {
 		expected: expect,
 		dst:      reflect.ValueOf(dstP),
 		src:      reflect.ValueOf(src),
+	}
+}
+
+func newStructToMapStepTest[T any](expect map[string]any, src T, eq func(a, b any) bool) baseStepTest {
+	var dst = new(make(map[string]any))
+	return baseStepTest{
+		expected: expect,
+		dst:      reflect.ValueOf(dst),
+		src:      reflect.ValueOf(src),
+		equal:    eq,
 	}
 }
 
@@ -91,6 +102,22 @@ var stepTests = []baseStepTest{
 		},
 	),
 
+	// add one extra to see exactly how many allocs when cache is prepopulated
+	newBaseStepTest(
+		biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+		biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+	),
+
 	newBaseStepTest(
 		&biggerStruct{
 			int:     16,
@@ -103,6 +130,29 @@ var stepTests = []baseStepTest{
 			string:  "yes",
 			bool:    false,
 			float64: 69.420,
+		},
+	),
+
+	newStructToMapStepTest(
+		map[string]any{
+			"int":     int(16),
+			"string":  string("yes"),
+			"bool":    bool(false),
+			"float64": float64(69.420),
+		},
+		biggerStruct{
+			int:     16,
+			string:  "yes",
+			bool:    false,
+			float64: 69.420,
+		},
+		func(_a, _b any) bool {
+			a := _a.(map[string]any)
+			b := _b.(map[string]any)
+			return a["int"] == b["int"] &&
+				a["string"] == b["string"] &&
+				a["bool"] == b["bool"] &&
+				a["float64"] == b["float64"]
 		},
 	),
 
@@ -308,14 +358,20 @@ func TestSteps(t *testing.T) {
 			}
 
 			dst := test.dst.Elem().Interface()
-			if !reflect.DeepEqual(dst, test.expected) {
+
+			test_equals := reflect.DeepEqual
+			if test.equal != nil {
+				test_equals = test.equal
+			}
+
+			if !test_equals(dst, test.expected) {
 				t.Errorf("dst does not match expected: %T(%v) != %T(%v)", dst, dst, test.expected, test.expected)
 				return
 			}
 
 			test.dst.Elem().Set(reflect.Zero(test.dst.Elem().Type()))
 
-			if !reflect.DeepEqual(dst, test.expected) {
+			if !test_equals(dst, test.expected) {
 				t.Errorf("dst does not match expected: %T(%v) != %T(%v)", dst, dst, test.expected, test.expected)
 				return
 			}

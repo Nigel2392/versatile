@@ -14,10 +14,6 @@ func StructFieldsForClone(s *State, typ reflect.Type) iter.Seq[reflect.StructFie
 				continue
 			}
 
-			if !s.Flags.Is(CF_NOVALIDATE) && !IsAllowedType(sf.Type) {
-				continue
-			}
-
 			if !yield(sf) {
 				return
 			}

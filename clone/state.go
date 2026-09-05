@@ -182,8 +182,8 @@ func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step
 }
 
 func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step, err error) {
-	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && !IsAllowedType(src) {
-		return nil, ErrInvalid.Wrapf("%s is specified as non-clonable", src)
+	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && !OK.Type(src) {
+		return nil, ErrInvalid.Wrapf("State.StepInit: %s is specified as non-clonable", src)
 	}
 
 	step, ok := s.Step(dst, src)
@@ -207,7 +207,7 @@ func (s *State) StepCopy(ctx context.Context, step Step, dst, src reflect.Value)
 			}
 		}
 
-		if !IsAllowedValue(src) {
+		if !OK.Value(ctx, src) {
 			return ErrInvalid.Wrapf(
 				"%s is specified as non-clonable", src.Type(),
 			)

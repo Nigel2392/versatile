@@ -125,7 +125,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	step, err = state.StepInit(ctx, dstTyp, srcTyp)
 	if err != nil {
 		return errors.Wrapf(
-			err, "error while retrieving Clone step for %s => %s",
+			err, "%s => %s",
 			srcTyp, dstTyp,
 		)
 	}

@@ -1,75 +1,175 @@
 package clone
 
 import (
+	"context"
+	"fmt"
+	"iter"
 	"reflect"
 	"sync"
+	"unsafe"
 
-	"github.com/Nigel2392/goldcrest"
+	gc "github.com/Nigel2392/goldcrest"
 )
 
 var (
 	_typCheckIdentifier = "versatile.clone.AllowedType"
 	_valCheckIdentifier = "versatile.clone.AllowedValue"
-	_known_types        = make(map[reflect.Type]bool)
 )
 
 func init() {
-	RegisterClonableCheck(CheckFuncDisallowIface[sync.Locker]) // if implements locker, return false (block)
+	// These types cannot be cloned.
+	OK.Check(CheckDisallowIface[sync.Locker])
+	OK.Check(CheckDisallowType[sync.Cond])
+	OK.Check(CheckDisallowType[sync.Map])
+	OK.Check(CheckDisallowType[sync.Once])
+	OK.Check(CheckDisallowType[sync.Pool])
+	OK.Check(CheckDisallowType[sync.WaitGroup])
 }
 
-type ClonableCheckFunc interface {
-	ClonableCheckValueFunc | ClonableCheckTypeFunc
+type (
+	allowFlag int8
+
+	AllowList struct {
+		hooks      gc.HookRegistry
+		knownTypes map[reflect.Type]bool
+	}
+
+	ClonableCheckTypeFunc  = func(reflect.Type) bool
+	ClonableCheckValueFunc = func(reflect.Value, reflect.Type) bool
+
+	ClonableCheckFunc interface {
+		ClonableCheckValueFunc | ClonableCheckTypeFunc
+	}
+)
+
+const (
+	UNKNOWN_FLAG_FALLBACK = true
+
+	_false   allowFlag = -1
+	_unknown allowFlag = 0
+	_true    allowFlag = 1
+)
+
+func boolFlag(b bool) allowFlag {
+	if b {
+		return _true
+	}
+	return _false
 }
 
-type ClonableCheckTypeFunc = func(reflect.Type) bool
-type ClonableCheckValueFunc = func(reflect.Value, reflect.Type) bool
+func flagBool(flag allowFlag) bool {
+	if flag == 0 {
+		return UNKNOWN_FLAG_FALLBACK
+	}
+	return flag > 0
+}
 
-func RegisterClonableCheck[FUNC ClonableCheckFunc](fn FUNC) {
-	switch any(fn).(type) {
-	case ClonableCheckTypeFunc:
-		goldcrest.Register(_typCheckIdentifier, 0, fn)
-	case ClonableCheckValueFunc:
-		goldcrest.Register(_valCheckIdentifier, 0, fn)
+func NewAllowList() AllowList {
+	return AllowList{
+		hooks:      make(gc.HookRegistry),
+		knownTypes: make(map[reflect.Type]bool),
 	}
 }
 
 // disallowed if provided [reflect.Type] implements [T]
-func CheckFuncDisallowIface[T any](t reflect.Type) bool {
-	return !t.Implements(reflect.TypeFor[T]())
+func CheckDisallowIface[TYPE any](t reflect.Type) bool {
+	disallowed := reflect.TypeFor[TYPE]()
+
+	// if implements, return true (block)
+	return t.Implements(disallowed) ||
+		t.Kind() != reflect.Pointer &&
+			reflect.PointerTo(t).Implements(disallowed)
 }
 
-func IsAllowedType(t reflect.Type) bool {
-	return _allowsCloneType(t, true)
+// disallowed if provided reflect.Type is the same kind as [TYPE]
+func CheckDisallowType[TYPE any](t reflect.Type) bool {
+	disallowed := reflect.TypeFor[TYPE]()
+	return t == disallowed || t.AssignableTo(disallowed) || t.ConvertibleTo(disallowed)
 }
 
-func IsAllowedValue(val reflect.Value) bool {
+// disallowed if provided reflect.Type is the same kind as [TYPE]
+func CheckDisallowKind[TYPE any](t reflect.Type) bool {
+	return t.Kind() == reflect.TypeFor[TYPE]().Kind() // if kind matches, return true (block)
+}
+
+var OK = NewAllowList()
+
+func (a *AllowList) Check[FUNC ClonableCheckFunc](fn FUNC) {
+	switch any(fn).(type) {
+	case ClonableCheckTypeFunc:
+		a.hooks.Register(_typCheckIdentifier, 0, fn)
+	case ClonableCheckValueFunc:
+		a.hooks.Register(_valCheckIdentifier, 0, fn)
+	}
+}
+
+func (a AllowList) Type(t reflect.Type) (allows bool) {
+	flag := a._allowsCloneType(t, true)
+	return flagBool(flag)
+}
+
+func (a AllowList) Value(ctx context.Context, val reflect.Value) bool {
 	if val.Kind() == reflect.Invalid {
 		return false
 	}
 
-	typ := val.Type()
-	orig := typ
-	allows, ok := _known_types[typ]
+	var (
+		typ   = val.Type()
+		_, fL = (*(*gc.HookRegistry)(unsafe.Pointer(&a))).
+			GetIter[ClonableCheckValueFunc](_valCheckIdentifier)
+	)
+
+	allows, ok := a.knownTypes[typ]
 	if ok {
 		return allows
 	}
 
+	flag := a._allowsCloneValue(ctx, typ, val, fL)
+	switch flag {
+	case -1: // disallowed values
+		a.knownTypes[typ] = false
+		allows = false
+
+	case 1: // allowed values
+		a.knownTypes[typ] = true
+		allows = true
+
+	case 0: // unknown
+		allows = UNKNOWN_FLAG_FALLBACK
+
+	default:
+		panic(fmt.Sprintf("unknown flag %d, must be -1, 0 or 1", flag))
+	}
+
+	return allows
+}
+
+func (a AllowList) _allowsCloneValue(_ context.Context, typ reflect.Type, val reflect.Value, fL iter.Seq[ClonableCheckValueFunc]) allowFlag {
+	orig := typ
 checkValue:
-	fL := goldcrest.Get[ClonableCheckValueFunc](_valCheckIdentifier)
-	for _, check := range fL {
-		if !check(val, typ) {
-			_known_types[typ] = false
-			return false
+	allows, ok := a.knownTypes[typ]
+	if ok {
+		return boolFlag(allows)
+	}
+
+	for check := range fL {
+		if check(val, typ) {
+			a.knownTypes[orig] = false
+			return _false
 		}
 	}
 
-	if typ.Kind() != reflect.Interface && !_allowsCloneType(typ, false) {
-		return false
+	if typ.Kind() != reflect.Interface {
+		flag := a._allowsCloneType(typ, false)
+		if flag < 0 {
+			return _false
+		}
 	}
 
+	var allowFlag allowFlag
 	switch val.Kind() {
 	case reflect.Array, reflect.Slice:
-		allows = _allowsCloneType(typ.Elem(), false)
+		allowFlag = a._allowsCloneType(typ.Elem(), false)
 
 	case reflect.Pointer:
 		typ = typ.Elem()
@@ -83,34 +183,52 @@ checkValue:
 			goto checkValue
 		}
 
-		allows = _allowsCloneType(typ, false)
+		allowFlag = a._allowsCloneType(typ, false)
 
 	default:
-		allows = _allowsCloneType(typ, false)
+		allowFlag = _true
+
 	}
 
-	_known_types[orig] = allows
-	return true
+	if allowFlag != 0 {
+		a.knownTypes[orig] = allowFlag > 0
+	}
+
+	return allowFlag
 }
 
-func _allowsCloneType(t reflect.Type, setCache bool) bool {
-	if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
-		return true // is literal any
-	}
+// 1: allowed
+// 0: unsure
+// -1: block
+func (a AllowList) _allowsCloneType(t reflect.Type, setCache bool) allowFlag {
 
-	orig := t
+	var (
+		orig = t
+		fL   []ClonableCheckTypeFunc
+	)
 
 checkTypes:
-	allows, ok := _known_types[t]
-	if ok {
-		return allows
+	if t.Kind() == reflect.Interface && t.NumMethod() == 0 {
+		return 1 // is literal any
 	}
 
-	fL := goldcrest.Get[ClonableCheckTypeFunc](_typCheckIdentifier)
+	allows, ok := a.knownTypes[t]
+	if ok {
+		return boolFlag(allows)
+	}
+
+	if fL == nil {
+		fL = a.hooks.Get[ClonableCheckTypeFunc](_typCheckIdentifier)
+	}
+
+	if len(fL) == 0 {
+		return _unknown
+	}
+
 	for _, check := range fL {
-		if !check(t) { // always set cache, even if [t] is [interface{}]
-			_known_types[t] = false
-			return false
+		if check(t) { // always set cache, even if [t] is [interface{}]
+			a.knownTypes[orig] = false
+			return _false
 		}
 	}
 
@@ -121,8 +239,8 @@ checkTypes:
 	}
 
 	if setCache && orig.Kind() != reflect.Interface {
-		_known_types[orig] = true
+		a.knownTypes[orig] = true
 	}
 
-	return true
+	return _true
 }
