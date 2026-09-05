@@ -53,6 +53,10 @@ func setUnsafePtr[OUT any](ptr unsafe.Pointer, val OUT, err error) (bool, error)
 func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error) {
 
 	var anyDest = any(dstPtr)
+	if v, ok := anyDest.(*interface{}); ok {
+		anyDest = *v
+	}
+
 	if flags.Is(SF_SQL_SCANNER) {
 		if scanner, ok := anyDest.(sql.Scanner); ok {
 			err := scanner.Scan(ConvertToUniformType(src))
@@ -60,7 +64,6 @@ func ScanTo[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err err
 		}
 	}
 
-chkDst:
 	chkPtr := any(*dstPtr) // could be pointer already???
 	if flags.Is(SF_SQL_SCANNER) {
 		if scanner, ok := chkPtr.(sql.Scanner); ok {
@@ -82,10 +85,6 @@ chkDst:
 	}
 
 	switch this := anyDest.(type) {
-	case *interface{}:
-		anyDest = *this
-		goto chkDst
-
 	case *int:
 		switch val := ConvertToUniformType(src).(type) {
 		case int64:
