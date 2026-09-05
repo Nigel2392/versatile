@@ -19,7 +19,7 @@ var (
 	_ InitStep = (*StructStep)(nil)
 	_ InitStep = (*MapStep)(nil)
 	_ InitStep = (*StructToMapStep)(nil)
-	_ InitStep = (*MapToStructStep)(nil)
+	// _ InitStep = (*MapToStructStep)(nil)
 	_ InitStep = (*SliceStep)(nil)
 	_ InitStep = (*ToArrayStep)(nil)
 )
@@ -35,10 +35,16 @@ type InitStep interface {
 	Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error)
 }
 
+// Copy value src into pointer dst
+//
+// Options can be provided to change the state and behaviour
 func CopyT[TYP any, PTR any](ctx context.Context, dst *PTR, src TYP, opts ...func(*State)) (err error) {
 	return Copy(ctx, dst, src, opts...)
 }
 
+// Copy value src into pointer dst
+//
+// Options can be provided to change the state and behaviour
 func Copy(ctx context.Context, dst any, src any, opts ...func(*State)) (err error) {
 	var (
 		rvDst = reflect.ValueOf(dst)
