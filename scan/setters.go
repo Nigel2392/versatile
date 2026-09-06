@@ -66,16 +66,16 @@ func Scan[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error
 	}
 
 	if flags.Is(SF_SQL_SCANNER) {
-		if scanner, ok := anyDest.(sql.Scanner); ok {
-			err := scanner.Scan(convertToUniformType(src, reflect.Value{}))
-			return err == nil, err
-		}
-
 		if dv, ok := src.(driver.Valuer); ok {
 			src, err = dv.Value()
 			if err != nil {
 				return false, err
 			}
+		}
+
+		if scanner, ok := anyDest.(sql.Scanner); ok {
+			err := scanner.Scan(convertToUniformType(src, reflect.Value{}))
+			return err == nil, err
 		}
 	}
 
