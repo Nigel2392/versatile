@@ -27,19 +27,56 @@ type benchUUID uuid.UUID
 
 func benchScan[T any](b *testing.B, src any) {
 	var dest T
+	var err error
 	b.ResetTimer()
 	for b.Loop() {
-		Scan(&dest, src, SF_NONE)
+		_, err = Scan(&dest, src, SF_NONE)
+		if err != nil {
+			b.Fatalf("error during benchmark %q: %v", b.Name(), err)
+		}
+	}
+}
+
+func benchDirectAssignment[T any](b *testing.B, src T) {
+	b.ResetTimer()
+	for b.Loop() {
+		var dest any = new(T)
+		*(dest.(*T)) = src
 	}
 }
 
 func benchRScan[T any](b *testing.B, src any) {
 	var dest T
+	var err error
 	destV := reflect.ValueOf(&dest)
 	b.ResetTimer()
 	for b.Loop() {
-		RScan(destV, src, SF_NONE)
+		_, err = RScan(destV, src, SF_NONE)
+		if err != nil {
+			b.Fatalf("error during benchmark %q: %v", b.Name(), err)
+		}
 	}
+}
+
+func BenchmarkDirectAssignment(b *testing.B) {
+	b.Run("int", func(b *testing.B) { benchDirectAssignment[int](b, int(1)) })
+	b.Run("int8", func(b *testing.B) { benchDirectAssignment[int8](b, int8(1)) })
+	b.Run("int16", func(b *testing.B) { benchDirectAssignment[int16](b, int16(1)) })
+	b.Run("int32", func(b *testing.B) { benchDirectAssignment[int32](b, int32(1)) })
+	b.Run("int64", func(b *testing.B) { benchDirectAssignment[int64](b, int64(1)) })
+	b.Run("uint", func(b *testing.B) { benchDirectAssignment[uint](b, uint(1)) })
+	b.Run("uint8", func(b *testing.B) { benchDirectAssignment[uint8](b, uint8(1)) })
+	b.Run("uint16", func(b *testing.B) { benchDirectAssignment[uint16](b, uint16(1)) })
+	b.Run("uint32", func(b *testing.B) { benchDirectAssignment[uint32](b, uint32(1)) })
+	b.Run("uint64", func(b *testing.B) { benchDirectAssignment[uint64](b, uint64(1)) })
+	b.Run("uintptr", func(b *testing.B) { benchDirectAssignment[uintptr](b, uintptr(1)) })
+	b.Run("float32", func(b *testing.B) { benchDirectAssignment[float32](b, float32(1)) })
+	b.Run("float64", func(b *testing.B) { benchDirectAssignment[float64](b, float64(1)) })
+	b.Run("string", func(b *testing.B) { benchDirectAssignment[string](b, "test") })
+	b.Run("bool", func(b *testing.B) { benchDirectAssignment[bool](b, true) })
+	b.Run("bytes", func(b *testing.B) { benchDirectAssignment[[]byte](b, []byte("test")) })
+	b.Run("runes", func(b *testing.B) { benchDirectAssignment[[]rune](b, []rune("test")) })
+	b.Run("uuid", func(b *testing.B) { benchDirectAssignment[uuid.UUID](b, uuid.Max()) })
 }
 
 func BenchmarkScan(b *testing.B) {
