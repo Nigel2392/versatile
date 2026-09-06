@@ -1,6 +1,8 @@
 # Versatile
 
 [![codecov](https://codecov.io/github/nigel2392/versatile/graph/badge.svg?token=QGP0Q707WJ)](https://codecov.io/github/nigel2392/versatile)
+[![Build Framework](https://img.shields.io/github/actions/workflow/status/Nigel2392/versatile/test_go.yml?branch=main)]([https://github.com/Nigel2392/go-django/actions](https://github.com/Nigel2392/versatile))
+
 
 Versatile is a Go library providing flexible type conversion, comparison, and reflection utilities. It aims to bridge strict type boundaries safely at runtime, making it easier to work with dynamic data, function signatures, and interface abstractions.
 
