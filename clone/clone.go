@@ -50,18 +50,19 @@ func CopyT[TYP any, PTR any](ctx context.Context, dst *PTR, src TYP, opts ...fun
 // Clone value src
 //
 // Options can be provided to change the state and behaviour
-func Clone(ctx context.Context, src any, opts ...func(*State)) (val any, err error) {
+func Clone[T any](ctx context.Context, src any, opts ...func(*State)) (val T, err error) {
 	var (
 		rvSrc = versatile.ReflectValue(src)
 		rvDst = reflect.New(rvSrc.Type())
 	)
 
 	if rvSrc.Kind() == reflect.Invalid {
-		return nil, ErrInvalid.Wrap("src is invalid")
+		return val, ErrInvalid.Wrap("src is invalid")
 	}
 
 	err = rcopy(ctx, rvDst, rvSrc, opts)
-	return rvDst.Elem().Interface(), nil
+
+	return rvDst.Elem().Interface().(T), nil
 }
 
 // Copy value src into pointer dst

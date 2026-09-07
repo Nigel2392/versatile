@@ -154,7 +154,7 @@ func BenchmarkSteps(b *testing.B) {
 		if !test.noClone {
 			b.Run(fmt.Sprintf("TestBaseStepClone-%T", test.src.Interface()), func(b *testing.B) {
 				for b.Loop() {
-					_, err := Clone(stateCtx, test.src, FLAGFN)
+					_, err := Clone[any](stateCtx, test.src, FLAGFN)
 					if err != nil {
 						b.Error(err)
 						return

@@ -390,7 +390,7 @@ func TestSteps(t *testing.T) {
 	for _, test := range stepTests {
 		if !test.noClone {
 			t.Run(fmt.Sprintf("TestBaseStepClone-%T", test.src.Interface()), func(t *testing.T) {
-				dst, err := Clone(t.Context(), test.src, FLAGFN)
+				dst, err := Clone[any](t.Context(), test.src, FLAGFN)
 				if err != nil {
 					t.Errorf("%v: %+v", err, err)
 					return
