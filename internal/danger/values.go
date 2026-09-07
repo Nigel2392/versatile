@@ -21,11 +21,10 @@ var setDirectKinds = func() reflect.Kind {
 	n |= 1 << reflect.Complex64
 	n |= 1 << reflect.Complex128
 	n |= 1 << reflect.Uintptr
-	n |= 1 << reflect.Func
 	return n
 }()
 
-// isValueType reports wether the given type is a value or reference type.
+// isValueType reports wether the given type is a concrete type.
 func IsValueType(k reflect.Kind) bool {
 	return setDirectKinds&(1<<k) > 0
 }

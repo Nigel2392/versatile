@@ -23,6 +23,7 @@ const (
 	SF_SQL_SCANNER ScanFlag = 1 << iota
 	SF_STRCONV
 	SF_REFLECTCONV
+	fromScan
 
 	SF_CONVS   = SF_STRCONV | SF_REFLECTCONV
 	SF_DEFAULT = SF_SQL_SCANNER | SF_STRCONV | SF_REFLECTCONV
@@ -408,7 +409,10 @@ func Scan[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error
 			*this = val
 			wasSet = true
 		case []byte:
-			if flags.Is(SF_STRCONV) {
+			if len(val) == 16 {
+				*this = uuid.UUID(val)
+				wasSet = true
+			} else if flags.Is(SF_STRCONV) {
 				*this, err = uuid.Parse(string(val))
 				wasSet = true
 			}
@@ -424,7 +428,10 @@ func Scan[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error
 				*this = val
 				wasSet = true
 			case []byte:
-				if flags.Is(SF_STRCONV) {
+				if len(val) == 16 {
+					*this = uuid.UUID(val)
+					wasSet = true
+				} else if flags.Is(SF_STRCONV) {
 					*this, err = uuid.Parse(string(val))
 					wasSet = true
 				}
@@ -435,18 +442,13 @@ func Scan[DST any](dstPtr *DST, src any, flags ScanFlag) (wasSet bool, err error
 				}
 			}
 		}
-
 	}
 
-	if wasSet {
+	if wasSet || err != nil {
 		return wasSet, err
 	}
 
-	if err != nil {
-		return false, err
-	}
-
-	return rScan(reflect.ValueOf(dstPtr), reflect.ValueOf(src), src, flags)
+	return rScan(reflect.ValueOf(dstPtr), reflect.ValueOf(src), src, flags|fromScan)
 }
 
 type value struct {
@@ -470,6 +472,8 @@ func RScan(dstPtr reflect.Value, src any, flags ScanFlag) (wasSet bool, err erro
 	return rScan(dstPtr, srcV, src, flags)
 }
 
+var sqlScannerType = reflect.TypeFor[sql.Scanner]()
+
 func rScan(dstPtr, srcV reflect.Value, src any, flags ScanFlag) (wasSet bool, err error) {
 
 	var (
@@ -481,6 +485,20 @@ func rScan(dstPtr, srcV reflect.Value, src any, flags ScanFlag) (wasSet bool, er
 	if (*value)(unsafe.Pointer(&srcV)).typ == dstElemVal.typ {
 		_dstElemVal.Set(srcV)
 		return true, nil
+	}
+
+	if !flags.Is(fromScan) && flags.Is(SF_SQL_SCANNER) {
+		if dv, ok := src.(driver.Valuer); ok {
+			src, err = dv.Value()
+			if err != nil {
+				return false, err
+			}
+		}
+
+		if dstPtr.Type().Implements(sqlScannerType) {
+			err = dstPtr.Interface().(sql.Scanner).Scan(src)
+			return err == nil, err
+		}
 	}
 
 	// Get the raw memory address of the destination
@@ -780,6 +798,11 @@ func rScan(dstPtr, srcV reflect.Value, src any, flags ScanFlag) (wasSet bool, er
 
 			}
 		}
+	case reflect.Interface:
+		if _dstElemVal.Type().NumMethod() == 0 {
+			*(*any)(ptr) = src
+			wasSet = true
+		}
 	}
 
 	if err != nil {
@@ -812,6 +835,7 @@ func ConvertToUniformType(val any) any {
 }
 
 func convertToUniformType(val any, valOfVal reflect.Value) any {
+	var isNil bool
 	switch v := val.(type) {
 	case int64,
 		uint64,
@@ -853,9 +877,18 @@ func convertToUniformType(val any, valOfVal reflect.Value) any {
 	case timeObject:
 		// see queries/src/drivers/types.go time types
 		return v.Time()
+
+	case reflect.Value:
+		if !valOfVal.IsValid() {
+			valOfVal = v
+		}
+
+	case nil:
+		// fallthrough to valOfVal reflection check
+		isNil = true
 	}
 
-	if (*value)(unsafe.Pointer(&valOfVal)).flag == 0 {
+	if (*value)(unsafe.Pointer(&valOfVal)).flag == 0 && !isNil {
 		valOfVal = reflect.ValueOf(val)
 	}
 
@@ -880,10 +913,28 @@ func convertToUniformType(val any, valOfVal reflect.Value) any {
 		return valOfVal.Float()
 
 	case reflect.String:
-		return valOfVal.String()
+		eface := emptyInterface{
+			typ:  stringIfaceType,
+			word: (*ptrValue)(unsafe.Pointer(&valOfVal)).ptr,
+		}
+		return *(*any)(unsafe.Pointer(&eface))
 
 	case reflect.Bool:
-		return valOfVal.Bool()
+		eface := emptyInterface{
+			typ:  boolIfaceType,
+			word: (*ptrValue)(unsafe.Pointer(&valOfVal)).ptr,
+		}
+		return *(*any)(unsafe.Pointer(&eface))
+
+	case reflect.Array:
+		valTyp := valOfVal.Type()
+		if valTyp.Elem().Kind() == reflect.Uint8 && valTyp.Len() == 16 {
+			eface := emptyInterface{
+				typ:  uuidIfaceType,
+				word: (*ptrValue)(unsafe.Pointer(&valOfVal)).ptr,
+			}
+			return *(*any)(unsafe.Pointer(&eface))
+		}
 
 	case reflect.Slice:
 		elem := valOfVal.Type().Elem()
@@ -898,4 +949,26 @@ func convertToUniformType(val any, valOfVal reflect.Value) any {
 	}
 
 	return val
+}
+
+type ptrValue struct {
+	typ  uintptr
+	ptr  unsafe.Pointer
+	flag uintptr
+}
+
+var (
+	boolIfaceType   = typeOfIfacePtr[bool]()
+	uuidIfaceType   = typeOfIfacePtr[uuid.UUID]()
+	stringIfaceType = typeOfIfacePtr[string]()
+)
+
+func typeOfIfacePtr[T any]() uintptr {
+	rv := reflect.ValueOf(new(T)).Elem()
+	return (*value)(unsafe.Pointer(&rv)).typ
+}
+
+type emptyInterface struct {
+	typ  uintptr
+	word unsafe.Pointer
 }
