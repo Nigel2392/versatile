@@ -269,7 +269,7 @@ func WithFuncArgs(args ...any) func(*FuncConfig) {
 type FuncConfig struct {
 	InjectContext reflect.Value
 	Wrappers      []func(src reflect.Value, srcTyp reflect.Type, dst reflect.Type, injectCtx bool) (newSrc reflect.Value)
-	Decorators    []func(fn func([]reflect.Value) []reflect.Value) func([]reflect.Value) []reflect.Value
+	Decorators    []func(typ reflect.Type, fn func([]reflect.Value) []reflect.Value) func([]reflect.Value) []reflect.Value
 }
 
 func (f FuncConfig) wrap(fnType reflect.Type, fnVal reflect.Value, out reflect.Type, injectCtx bool) (reflect.Type, reflect.Value, error) {
@@ -452,7 +452,7 @@ func RCastFunc(out reflect.Type, fn any, opts ...func(*FuncConfig)) (reflect.Val
 	}
 
 	for _, dec := range config.Decorators {
-		function = dec(function)
+		function = dec(out, function)
 	}
 
 	return reflect.MakeFunc(out, function), nil
@@ -1104,37 +1104,36 @@ func (c *Func) Call(args ...interface{}) []interface{} {
 	}
 
 	var variadicIndex = c.Type.NumIn() - 1
-	var in = make([]reflect.Value, 0, c.Type.NumIn())
+	var in = make([]reflect.Value, 0, len(args))
 
 	for i := 0; i < c.Type.NumIn(); i++ {
 		var typ = c.Type.In(i)
 		if c.Type.IsVariadic() && i == variadicIndex {
-			var values = reflect.MakeSlice(typ, 0, 0)
+			var typEl = typ.Elem()
 			for j := variadicIndex; j < len(args); j++ {
 				var valueOf = reflect.ValueOf(args[j])
-				var cnvrted, ok = RConvert(
-					&valueOf, typ.Elem(),
-				)
-				if !ok {
+				var vt = valueOf.Type()
+				switch {
+				case vt == typEl:
+				case vt.ConvertibleTo(typEl):
+					valueOf = valueOf.Convert(typEl)
+				default:
 					panicf("could not convert %T (%v) to %v", valueOf.Interface(), valueOf, typ)
 				}
-				values = reflect.Append(values, *cnvrted)
-			}
-			if values.Len() > 0 {
-				for j := 0; j < values.Len(); j++ {
-					in = append(in, values.Index(j))
-				}
+				in = append(in, valueOf)
 			}
 		} else {
 			var arg = args[i]
 			var valueOf = reflect.ValueOf(arg)
-			var cnvrted, ok = RConvert(
-				&valueOf, typ,
-			)
-			if !ok {
+			var vt = valueOf.Type()
+			switch {
+			case vt == typ:
+			case vt.ConvertibleTo(typ):
+				valueOf = valueOf.Convert(typ)
+			default:
 				panicf("could not convert %T (%v) to %v", valueOf.Interface(), valueOf, typ)
 			}
-			in = append(in, *cnvrted)
+			in = append(in, valueOf)
 		}
 
 		//if argTyp.ConvertibleTo(c.Type.In(i)) {
