@@ -74,7 +74,7 @@ func (f StructStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) 
 		addrDst := reflect.NewAt(targetFld.Type(), unsafe.Pointer(targetFld.UnsafeAddr()))
 		srcFldVal := reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
 
-		if err := s.StepCopy(ctx, fld.step, addrDst, srcFldVal); err != nil {
+		if err := s.StepCopy(ctx, fld.step, addrDst, srcFldVal, StructCaller{dstElem, fld.idx}); err != nil {
 			return errors.Wrapf(err, "StructStep.Copy(%v)", fld.idx)
 		}
 	}

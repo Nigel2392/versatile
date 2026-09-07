@@ -16,6 +16,53 @@ type (
 	newPtr = unsafe.Pointer
 )
 
+type Caller interface {
+	Value() reflect.Value
+}
+
+type SliceCaller struct {
+	Val   reflect.Value
+	Index int
+}
+
+type ReferenceCaller struct {
+	Ref reflect.Value
+}
+
+type TopLevelCaller struct {
+	Val reflect.Value
+}
+
+type StructCaller struct {
+	Val   reflect.Value
+	Field []int
+}
+
+type MapCaller struct {
+	Val reflect.Value
+	Key reflect.Value
+}
+
+func (t SliceCaller) Value() reflect.Value {
+	return t.Val
+}
+
+func (t ReferenceCaller) Value() reflect.Value {
+	return t.Ref
+}
+
+func (t TopLevelCaller) Value() reflect.Value {
+	return t.Val
+}
+
+func (t StructCaller) Value() reflect.Value {
+	return t.Val
+}
+
+func (t MapCaller) Value() reflect.Value {
+	return t.Val
+}
+
 const (
 	CF_INVALID       CloneFlag = iota
 	CF_NOWRAP        CloneFlag = 1 << iota // don't allow wrapping, even if a wrap function is provided
@@ -191,12 +238,15 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 		return nil, ErrNoSteps.Wrapf("No steps found for %v and %v", dst, src)
 	}
 
-	return initStep(ctx, s, step, dst, src)
+	if i, ok := step.(InitStep); ok {
+		step, err = i.Init(ctx, s, dst, src)
+	}
+
+	return step, err
 }
 
-func (s *State) StepCopy(ctx context.Context, step Step, dst, src reflect.Value) error {
+func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) error {
 	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) {
-
 		if dst.Kind() != reflect.Pointer && !dst.CanSet() {
 			if dst.CanInterface() {
 				dstf := dst.Interface()
@@ -214,5 +264,23 @@ func (s *State) StepCopy(ctx context.Context, step Step, dst, src reflect.Value)
 		}
 	}
 
-	return step.Copy(ctx, s, dst, src)
+	return s.copy(ctx, step, dst, src, caller)
+}
+
+func (s *State) copy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) (err error) {
+	switch c := step.(type) {
+	case CallerStep[CALLER]:
+		err = c.CopyWithCaller(ctx, s, dst, src, caller)
+	case CallerStep[Caller]:
+		err = c.CopyWithCaller(ctx, s, dst, src, caller)
+	default:
+		err = step.Copy(ctx, s, dst, src)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }

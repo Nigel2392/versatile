@@ -1,6 +1,7 @@
 package clone
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -110,6 +111,19 @@ type linkedList struct {
 	Next *linkedList
 }
 
+type testIfaceCopy interface {
+	Testable()
+}
+
+type testableIfaceCopy struct {
+	id   int
+	name string
+}
+
+func (t testableIfaceCopy) Testable() {
+
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -144,6 +158,49 @@ func assertNotSamePtr(t *testing.T, label string, a, b any) {
 // ---------------------------------------------------------------------------
 // Part 1: Complex / Nested type tests (non-reference-sharing)
 // ---------------------------------------------------------------------------
+
+type testIfaceCopyStep struct {
+	stepCalled *int
+}
+
+func (t testIfaceCopyStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+	*t.stepCalled = *t.stepCalled + 1
+	if src.Type() != reflect.TypeFor[testableIfaceCopy]() {
+		return ErrInvalid.Wrapf("src is type %s but expected %T", src.Type(), testableIfaceCopy{})
+	}
+
+	if dst.Elem().Type() != reflect.TypeFor[testIfaceCopy]() {
+		return ErrInvalid.Wrapf("src is type %s but expected %T", src.Type(), testableIfaceCopy{})
+	}
+
+	nv := src.Interface().(testableIfaceCopy)
+	dst.Elem().Set(reflect.ValueOf(testableIfaceCopy{
+		id:   nv.id,
+		name: nv.name,
+	}))
+	return nil
+}
+
+func TestRegisteredInterfaceDst(t *testing.T) {
+	var callCount int
+	AddStepType(reflect.TypeFor[testIfaceCopy](), testIfaceCopyStep{&callCount})
+
+	dst := new(testIfaceCopy)
+	src := testableIfaceCopy{
+		id:   50,
+		name: "myname",
+	}
+
+	mustCopy(t, dst, src)
+
+	if callCount != 1 {
+		t.Fatalf("expected step Copy to be called exactly once, got %d", callCount)
+	}
+
+	assertDeepEqual(t, "dst.A", (*dst).(testableIfaceCopy).id, src.id)
+	assertDeepEqual(t, "dst.B", (*dst).(testableIfaceCopy).name, src.name)
+
+}
 
 func TestNested_StructInStruct(t *testing.T) {
 	src := outer{
@@ -397,7 +454,7 @@ func TestNested_EmptyCollections(t *testing.T) {
 	src := mixedRefs{
 		Ptr:   nil,
 		Slice: []*inner{},
-		// Map:   map[string]*inner{},
+		Map:   map[string]*inner{},
 	}
 	var dst mixedRefs
 	mustCopy(t, &dst, src)
@@ -408,9 +465,9 @@ func TestNested_EmptyCollections(t *testing.T) {
 	if len(dst.Slice) != 0 {
 		t.Error("expected empty slice")
 	}
-	// if dst.Map == nil || len(dst.Map) != 0 {
-	// 	t.Error("expected empty (non-nil) map")
-	// }
+	if dst.Map == nil || len(dst.Map) != 0 {
+		t.Error("expected empty (non-nil) map")
+	}
 }
 
 func TestNested_NilSlicePreserved(t *testing.T) {
@@ -523,7 +580,7 @@ func TestSharedRef_PointerInStructAndSlice(t *testing.T) {
 	src := mixedRefs{
 		Ptr:   shared,
 		Slice: []*inner{shared},
-		// Map:   map[string]*inner{"s": shared},
+		Map:   map[string]*inner{"s": shared},
 	}
 	var dst mixedRefs
 	mustCopy(t, &dst, src)
@@ -532,9 +589,9 @@ func TestSharedRef_PointerInStructAndSlice(t *testing.T) {
 	if dst.Ptr != dst.Slice[0] {
 		t.Fatal("Ptr and Slice[0] should share the same pointer in the clone")
 	}
-	// if dst.Ptr != dst.Map["s"] {
-	// 	t.Fatal("Ptr and Map['s'] should share the same pointer in the clone")
-	// }
+	if dst.Ptr != dst.Map["s"] {
+		t.Fatal("Ptr and Map['s'] should share the same pointer in the clone")
+	}
 	assertNotSamePtr(t, "vs original", dst.Ptr, src.Ptr)
 }
 
@@ -816,7 +873,7 @@ func TestSharedRef_ArrayElementsShared(t *testing.T) {
 	}
 }
 
-func _TestSharedRef_SliceAndMapCrossReference(t *testing.T) {
+func TestSharedRef_SliceAndMapCrossReference(t *testing.T) {
 	shared := &inner{Value: 33}
 	type cross struct {
 		List []*inner

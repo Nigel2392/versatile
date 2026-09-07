@@ -67,6 +67,13 @@ func (r *stepRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
 		panic("nil types provided")
 	}
 
+	// some interfaces might provide their own way of copying values
+	if dst.Kind() == reflect.Interface && dst.NumMethod() > 0 {
+		if step, ok := r.steps[dst]; ok {
+			return step, true
+		}
+	}
+
 	if step, ok := r.steps[duo[reflect.Type]{dst, src}]; ok {
 		return step, true
 	}

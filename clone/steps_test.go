@@ -8,6 +8,7 @@ import (
 )
 
 type baseStepTest struct {
+	noClone  bool
 	expected any
 	dst      reflect.Value
 	src      reflect.Value
@@ -34,6 +35,7 @@ func newBaseMapTest[K comparable, V any](expect, src map[K]V) baseStepTest {
 func newStructToMapStepTest[T any](expect map[string]any, src T, eq func(a, b any) bool) baseStepTest {
 	var dst = new(make(map[string]any))
 	return baseStepTest{
+		noClone:  true,
 		expected: expect,
 		dst:      reflect.ValueOf(dst),
 		src:      reflect.ValueOf(src),
@@ -350,7 +352,7 @@ func TestSteps(t *testing.T) {
 	})
 
 	for _, test := range stepTests {
-		t.Run(fmt.Sprintf("TestBaseStep-%T", test.src.Interface()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("TestBaseStepCopy-%T", test.src.Interface()), func(t *testing.T) {
 			err := rcopy(t.Context(), test.dst, test.src, []func(*State){FLAGFN})
 			if err != nil {
 				t.Errorf("%v: %+v", err, err)
@@ -383,6 +385,40 @@ func TestSteps(t *testing.T) {
 				reflect.Indirect(reflect.ValueOf(test.expected)).Interface(),
 			)
 		})
+	}
+
+	for _, test := range stepTests {
+		if !test.noClone {
+			t.Run(fmt.Sprintf("TestBaseStepClone-%T", test.src.Interface()), func(t *testing.T) {
+				dst, err := Clone(t.Context(), test.src, FLAGFN)
+				if err != nil {
+					t.Errorf("%v: %+v", err, err)
+					return
+				}
+
+				test_equals := reflect.DeepEqual
+				if test.equal != nil {
+					test_equals = test.equal
+				}
+
+				if !test_equals(dst, test.expected) {
+					t.Errorf("dst does not match expected: %T(%v) != %T(%v)", dst, dst, test.expected, test.expected)
+					return
+				}
+
+				if reflect.TypeOf(dst) != test.src.Type() {
+					t.Errorf("type mismatch between dst and src: %T != %s", dst, test.src.Type())
+					return
+				}
+
+				t.Logf("dst == src:\n\t%T(%v) == %T(%v)",
+					reflect.Indirect(reflect.ValueOf(dst)).Interface(),
+					reflect.Indirect(reflect.ValueOf(dst)).Interface(),
+					reflect.Indirect(reflect.ValueOf(test.expected)).Interface(),
+					reflect.Indirect(reflect.ValueOf(test.expected)).Interface(),
+				)
+			})
+		}
 	}
 }
 

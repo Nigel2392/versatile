@@ -79,7 +79,7 @@ func (f MapStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) (er
 		}
 
 		if f.val != nil {
-			v, err = f.val.Copy(ctx, s, v)
+			v, err = f.val.CopyVal(ctx, s, newMap, k, v)
 			if err != nil {
 				return err
 			}
@@ -102,6 +102,13 @@ type mapItem struct {
 func (c mapItem) Copy(ctx context.Context, s *State, src reflect.Value) (dst reflect.Value, err error) {
 	dst = reflect.New(c.dstType)
 	err = c.step.Copy(ctx, s, dst, src)
+	return dst.Elem(), err
+}
+
+// Copy implementation of Copy function for map item copier
+func (c mapItem) CopyVal(ctx context.Context, s *State, mapV reflect.Value, mapKey reflect.Value, src reflect.Value) (dst reflect.Value, err error) {
+	dst = reflect.New(c.dstType)
+	err = s.StepCopy(ctx, c.step, dst, src, MapCaller{mapV, mapKey})
 	return dst.Elem(), err
 
 }

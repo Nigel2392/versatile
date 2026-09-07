@@ -140,7 +140,7 @@ func BenchmarkSteps(b *testing.B) {
 	})
 
 	for _, test := range stepTests {
-		b.Run(fmt.Sprintf("TestBaseStep-%T", test.src.Interface()), func(b *testing.B) {
+		b.Run(fmt.Sprintf("TestBaseStepCopy-%T", test.src.Interface()), func(b *testing.B) {
 			for b.Loop() {
 				err := rcopy(stateCtx, test.dst, test.src, []func(*State){FLAGFN})
 				if err != nil {
@@ -150,4 +150,18 @@ func BenchmarkSteps(b *testing.B) {
 			}
 		})
 	}
+	for _, test := range stepTests {
+		if !test.noClone {
+			b.Run(fmt.Sprintf("TestBaseStepClone-%T", test.src.Interface()), func(b *testing.B) {
+				for b.Loop() {
+					_, err := Clone(stateCtx, test.src, FLAGFN)
+					if err != nil {
+						b.Error(err)
+						return
+					}
+				}
+			})
+		}
+	}
+
 }

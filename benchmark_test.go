@@ -210,7 +210,7 @@ func BenchmarkCast_10Args_ExactMatch_Execution(b *testing.B) {
 	src := func(a, b_, c, d, e, f, g, h, i, j int) int { return a + j }
 	out, _ := versatile.CastFunc[func(int, int, int, int, int, int, int, int, int, int) int](src)
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 	}
 }
@@ -219,7 +219,7 @@ func BenchmarkCast_10Args_Convertible_Execution(b *testing.B) {
 	src := func(a, b_, c, d, e, f, g, h, i, j int32) int64 { return int64(a + j) }
 	out, _ := versatile.CastFunc[func(int8, int8, int8, int8, int8, int8, int8, int8, int8, int8) int32](src)
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 	}
 }
@@ -228,7 +228,7 @@ func BenchmarkCast_10Args_AnyToSpecific_Execution(b *testing.B) {
 	src := func(a, b_, c, d, e, f, g, h, i, j int) int { return a + j }
 	out, _ := versatile.CastFunc[func(any, any, any, any, any, any, any, any, any, any) float64](src)
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 	}
 }
@@ -237,7 +237,7 @@ func BenchmarkCast_10Args_Variadic_Execution(b *testing.B) {
 	src := func(a ...int) int { return a[0] + a[len(a)-1] }
 	out, _ := versatile.CastFunc[func(any, any, any, any, any, any, any, any, any, any) float64](src)
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 	}
 }
@@ -246,7 +246,7 @@ func BenchmarkCast_10Args_wrapper_Context_Variadic_Execution(b *testing.B) {
 	src := func(a ...int) int { return a[0] + a[len(a)-1] }
 	out, _ := versatile.CastFunc[func(any, any, any, any, any, any, any, any, any, any) float64](src, versatile.WithContext(b.Context()))
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 	}
 }
@@ -256,7 +256,7 @@ func BenchmarkCast_10Args_Wrapper_Context_Execution(b *testing.B) {
 	src := func(ctx context.Context, a, b_, c, d, e, f, g, h, i int64) float32 { return float32(a + i) }
 	out, _ := versatile.CastFunc[func(int8, int8, int8, int8, int8, int8, int8, int8, int8) int64](src, versatile.WithContext(ctx))
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(1, 2, 3, 4, 5, 6, 7, 8, 9)
 	}
 }
@@ -265,7 +265,7 @@ func BenchmarkCast_10Args_Wrapper_Variadic_Execution(b *testing.B) {
 	src := func(a ...int) int { return a[0] + a[len(a)-1] }
 	out, _ := versatile.CastFunc[func(any, any, any, any, any, any, any) float64](src, versatile.WithFuncArgs(1, 2, 3))
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(4, 5, 6, 7, 8, 9, 10)
 	}
 }
@@ -275,7 +275,7 @@ func BenchmarkCast_10Args_Wrapper_Execution(b *testing.B) {
 	src := func(ctx context.Context, a, b_, c, d, e, f, g, h, i int64) float32 { return float32(a + i) }
 	out, _ := versatile.CastFunc[func(int8, int8, int8, int8, int8, int8) int64](src, versatile.WithContext(ctx), versatile.WithFuncArgs(1, 2, 3))
 	b.ResetTimer()
-	for x := 0; x < b.N; x++ {
+	for b.Loop() {
 		_ = out(4, 5, 6, 7, 8, 9)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/Nigel2392/errors"
+	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
 	"github.com/Nigel2392/versatile/internal/danger"
 )
@@ -30,6 +31,10 @@ type Step interface {
 	Copy(ctx context.Context, s *State, dst, src reflect.Value) error
 }
 
+type CallerStep[CALLER Caller] interface {
+	CopyWithCaller(ctx context.Context, s *State, dst, src reflect.Value, caller CALLER) error
+}
+
 type InitStep interface {
 	Step
 	Init(ctx context.Context, s *State, dst, src reflect.Type) (Step, error)
@@ -42,13 +47,30 @@ func CopyT[TYP any, PTR any](ctx context.Context, dst *PTR, src TYP, opts ...fun
 	return Copy(ctx, dst, src, opts...)
 }
 
+// Clone value src
+//
+// Options can be provided to change the state and behaviour
+func Clone(ctx context.Context, src any, opts ...func(*State)) (val any, err error) {
+	var (
+		rvSrc = versatile.ReflectValue(src)
+		rvDst = reflect.New(rvSrc.Type())
+	)
+
+	if rvSrc.Kind() == reflect.Invalid {
+		return nil, ErrInvalid.Wrap("src is invalid")
+	}
+
+	err = rcopy(ctx, rvDst, rvSrc, opts)
+	return rvDst.Elem().Interface(), nil
+}
+
 // Copy value src into pointer dst
 //
 // Options can be provided to change the state and behaviour
 func Copy(ctx context.Context, dst any, src any, opts ...func(*State)) (err error) {
 	var (
-		rvDst = reflect.ValueOf(dst)
-		rvSrc = reflect.ValueOf(src)
+		rvDst = versatile.ReflectValue(dst)
+		rvSrc = versatile.ReflectValue(src)
 	)
 
 	if rvDst.Kind() != reflect.Pointer || rvDst.IsNil() {
@@ -138,17 +160,10 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	}
 
 	// copy to dst
-	err = step.Copy(ctx, state, dst, src)
+	err = state.StepCopy(ctx, step, dst, src, TopLevelCaller{Val: dst})
 
 	// ensure state lives through all steps
 	runtime.KeepAlive(_state)
 	return err
 
-}
-
-func initStep(ctx context.Context, state *State, step Step, dst, src reflect.Type) (_ Step, err error) {
-	if i, ok := step.(InitStep); ok {
-		step, err = i.Init(ctx, state, dst, src)
-	}
-	return step, err
 }
