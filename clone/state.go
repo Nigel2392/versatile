@@ -229,7 +229,7 @@ func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step
 }
 
 func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step, err error) {
-	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && !OK.Type(src) {
+	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) && !OK.Type(ctx, src) {
 		return nil, ErrInvalid.Wrapf("State.StepInit: %s is specified as non-clonable", src)
 	}
 
@@ -246,32 +246,44 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 }
 
 func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) error {
-	if !bitcheck.Is(s.Flags, CF_NOVALIDATE) {
-		if dst.Kind() != reflect.Pointer && !dst.CanSet() {
-			if dst.CanInterface() {
-				dstf := dst.Interface()
-				return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
-			}
-			if !dst.IsValid() {
-				return ErrInvalid.Wrapf("dst is invalid, cannot copy src %v", src.Interface())
-			}
-		}
-
-		if !OK.Value(ctx, src) {
-			return ErrInvalid.Wrapf(
-				"%s is specified as non-clonable", src.Type(),
-			)
-		}
+	if err := s.validate(ctx, dst, src); err != nil {
+		return err
 	}
 
 	return s.copy(ctx, step, dst, src, caller)
 }
 
+func (s *State) validate(ctx context.Context, dst, src reflect.Value) error {
+	if bitcheck.Is(s.Flags, CF_NOVALIDATE) {
+		return nil
+	}
+
+	if dst.Kind() != reflect.Pointer && !dst.CanSet() {
+		if dst.CanInterface() {
+			dstf := dst.Interface()
+			return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
+		}
+		if !dst.IsValid() {
+			return ErrInvalid.Wrapf("dst is invalid, cannot copy src %v", src.Interface())
+		}
+	}
+
+	if !OK.Value(ctx, src) {
+		return ErrInvalid.Wrapf(
+			"%s is specified as non-clonable", src.Type(),
+		)
+	}
+
+	return nil
+}
+
 func (s *State) copy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) (err error) {
 	switch c := step.(type) {
 	case CallerStep[CALLER]:
+		// wont allocate on heap unless CALLER is literal Caller interface.
 		err = c.CopyWithCaller(ctx, s, dst, src, caller)
 	case CallerStep[Caller]:
+		// will allocate on heap (interface boxing)
 		err = c.CopyWithCaller(ctx, s, dst, src, caller)
 	default:
 		err = step.Copy(ctx, s, dst, src)

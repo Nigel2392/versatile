@@ -21,7 +21,7 @@ func TestIsAllowedType_BasicTypes(t *testing.T) {
 
 	for _, v := range allowed {
 		typ := reflect.TypeOf(v)
-		if !OK.Type(typ) {
+		if !OK.Type(t.Context(), typ) {
 			t.Errorf("expected type %v to be allowed", typ)
 		}
 	}
@@ -44,7 +44,7 @@ func TestIsAllowedType_DisallowedSyncTypes(t *testing.T) {
 
 	for _, v := range disallowed {
 		val := reflect.ValueOf(&v).Elem().Elem()
-		if OK.Type(val.Type()) {
+		if OK.Type(t.Context(), val.Type()) {
 			t.Errorf("expected type %v to be disallowed", val.Type())
 		}
 	}
@@ -67,8 +67,16 @@ func TestIsAllowedValue_BasicValues(t *testing.T) {
 	}
 }
 
+type mutexStruct struct {
+	mu sync.Mutex
+}
+
+type hasEmbedderMutextStruct struct {
+	muS mutexStruct
+}
+
 // doesn't work, values arent
-func _TestIsAllowedValue_Interface(t *testing.T) {
+func TestIsAllowedValue_Interface(t *testing.T) {
 
 	var validIface any = 42
 	if !OK.Value(t.Context(), reflect.ValueOf(&validIface).Elem()) {
@@ -86,19 +94,32 @@ func _TestIsAllowedValue_Interface(t *testing.T) {
 	}
 }
 
+func TestIsAllowedValue_StructWithMutex(t *testing.T) {
+	var validIface any = hasEmbedderMutextStruct{}
+	if OK.Value(t.Context(), reflect.ValueOf(&validIface).Elem()) {
+		t.Errorf("expected interface containing mutex to be disallowed")
+	}
+
+	var invalidIface any = mutexStruct{}
+	if OK.Value(t.Context(), reflect.ValueOf(&invalidIface).Elem()) {
+		t.Errorf("expected interface containing sync.Mutex to be disallowed")
+	}
+
+}
+
 func TestCheckFuncDisallowKind(t *testing.T) {
 
 	// Block all slices
 	OK := NewAllowList()
 	OK.Check(CheckDisallowKind[[]int])
 
-	if OK.Type(reflect.TypeFor[[]string]()) {
+	if OK.Type(t.Context(), reflect.TypeFor[[]string]()) {
 		t.Errorf("expected string slice to be disallowed by kind check")
 	}
 
-	if OK.Type(reflect.TypeFor[int]()) {
+	if OK.Type(t.Context(), reflect.TypeFor[int]()) {
 		// Should not block non-slice types
-		if !OK.Type(reflect.TypeFor[int]()) {
+		if !OK.Type(t.Context(), reflect.TypeFor[int]()) {
 			t.Errorf("expected int to be allowed")
 		}
 	}
@@ -122,7 +143,7 @@ func BenchmarkIsAllowedType_Allowed(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		OK.Type(typ)
+		OK.Type(b.Context(), typ)
 	}
 }
 
@@ -132,7 +153,19 @@ func BenchmarkIsAllowedType_Disallowed(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		OK.Type(typ)
+		OK.Type(b.Context(), typ)
+	}
+}
+
+func BenchmarkIsAllowedType_StructWithMutex(b *testing.B) {
+
+	typ := reflect.TypeOf(hasEmbedderMutextStruct{})
+	b.ResetTimer()
+
+	for b.Loop() {
+		if OK.Type(b.Context(), typ) {
+			b.Fatal("expected not allowed")
+		}
 	}
 }
 
@@ -142,7 +175,7 @@ func BenchmarkIsAllowedType_PointerDisallowed(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		OK.Type(typ)
+		OK.Type(b.Context(), typ)
 	}
 }
 
@@ -177,16 +210,14 @@ func BenchmarkIsAllowedValue_NestedInterface(b *testing.B) {
 	}
 }
 
-func BenchmarkIsAllowedValue_CustomValueCheck(b *testing.B) {
-
-	OK.Check(func(v reflect.Value, typ reflect.Type) bool {
-		return false
-	})
-
-	val := reflect.ValueOf(12345)
+func BenchmarkIsAllowedValue_StructWithMutex(b *testing.B) {
+	var iface any = hasEmbedderMutextStruct{}
+	val := reflect.ValueOf(&iface).Elem()
 	b.ResetTimer()
 
 	for b.Loop() {
-		OK.Value(b.Context(), val)
+		if OK.Value(b.Context(), val) {
+			b.Fatal("expected not allowed")
+		}
 	}
 }
