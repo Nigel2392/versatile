@@ -11,18 +11,24 @@ import (
 
 	"github.com/Nigel2392/versatile/bitcheck"
 	"github.com/Nigel2392/versatile/internal/danger"
+	"github.com/Nigel2392/versatile/internal/registry"
 	"golang.org/x/exp/constraints"
 )
 
-type ScanFlag = bitcheck.Flag
+type (
+	ScanFlag   = bitcheck.Flag
+	timeObject interface{ Time() time.Time }
+	ScanFunc   = func(dst reflect.Value, dstT reflect.Type, src reflect.Value, flags ScanFlag) (wasSet bool, err error)
+)
 
-type timeObject interface{ Time() time.Time }
+var _reg = registry.NewTypeRegistry[ScanFunc](nil)
 
 const (
 	SF_NONE        ScanFlag = 0
 	SF_SQL_SCANNER ScanFlag = 1 << iota
 	SF_STRCONV
 	SF_REFLECTCONV
+	SF_NO_REG
 	fromScan
 
 	SF_CONVS   = SF_STRCONV | SF_REFLECTCONV
@@ -823,7 +829,17 @@ func rScan(dstPtr, srcV reflect.Value, src any, flags ScanFlag) (wasSet bool, er
 		return true, err
 	}
 
-	return false, err
+	if flags.Is(SF_NO_REG) {
+		return false, err
+	}
+
+	srcT := srcV.Type()
+	scanner, ok := _reg.Get(dstElemTyp, srcT)
+	if !ok {
+		return false, err
+	}
+
+	return scanner(_dstElemVal, dstElemTyp, srcV, flags)
 }
 
 // Tries to convert val to an expected type.

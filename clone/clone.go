@@ -10,6 +10,7 @@ import (
 	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
 	"github.com/Nigel2392/versatile/internal/danger"
+	"github.com/Nigel2392/versatile/internal/registry"
 )
 
 var (
@@ -93,7 +94,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	if !ok {
 		_state = new(State{
 			pointers: make(map[oldPtr]newPtr),
-			cache:    &cacheRegistry{steps: make(map[any]Step)},
+			cache:    &cacheRegistry{_steps: registry.NewTypeRegistry[Step](_stepFromReg)},
 		})
 	} else {
 		s := *_state

@@ -280,7 +280,7 @@ func (s *State) validate(ctx context.Context, dst, src reflect.Value) error {
 func (s *State) copy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) (err error) {
 	switch c := step.(type) {
 	case CallerStep[CALLER]:
-		// wont allocate on heap unless CALLER is literal Caller interface.
+		// wont allocate on heap by default
 		err = c.CopyWithCaller(ctx, s, dst, src, caller)
 	case CallerStep[Caller]:
 		// will allocate on heap (interface boxing)

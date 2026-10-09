@@ -1,6 +1,10 @@
 package clone
 
-import "context"
+import (
+	"context"
+
+	"github.com/Nigel2392/versatile/internal/registry"
+)
 
 type stateContextKey struct{}
 
@@ -17,7 +21,7 @@ func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Con
 	if state, ok = StateFromContext(ctx); !ok {
 		state = new(State{
 			pointers: make(map[oldPtr]newPtr),
-			cache:    &cacheRegistry{steps: make(map[any]Step)},
+			cache:    &cacheRegistry{_steps: registry.NewTypeRegistry(_stepFromReg)},
 		})
 
 		// only need to override context when state is not present already

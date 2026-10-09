@@ -157,7 +157,7 @@ checkTypes:
 	}
 
 	allows, ok := a.knownTypes[t]
-	if ok && allows != 0 {
+	if ok && allows != _unknown {
 		return allows
 	}
 
@@ -208,14 +208,18 @@ checkTypes:
 
 		for index := range t.NumField() {
 
-			typ := t.Field(index).Type
-			if v, ok := a.knownTypes[typ]; ok && v != 0 {
-				return v
+			var (
+				typ = t.Field(index).Type
+				v   allowFlag
+			)
+
+			v, ok = a.knownTypes[typ]
+			if !ok {
+				a.knownTypes[typ] = _unknown
+				v = a._allowsCloneType(ctx, typ, actionFlag, fL)
 			}
 
-			flag := a._allowsCloneType(ctx, typ, actionFlag, fL)
-
-			if flag == _false {
+			if v == _false {
 				a.knownTypes[t] = _false
 				return _false
 			}
