@@ -21,7 +21,6 @@ func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Con
 	if state, ok = StateFromContext(ctx); !ok {
 		state = new(State{
 			pointers: make(map[oldPtr]newPtr),
-			cache:    &cacheRegistry{_steps: registry.NewTypeRegistry(_stepFromReg)},
 		})
 
 		// only need to override context when state is not present already
@@ -30,6 +29,10 @@ func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Con
 
 	for _, opt := range opts {
 		opt(state)
+	}
+
+	if state.cache == nil && !state.Flags.Is(CF_NO_CACHE) {
+		state.cache = &cacheRegistry{_steps: registry.NewTypeRegistry(nil, registry.EXACT_IFACE, _getterExactType)}
 	}
 
 	return ctx

@@ -2,10 +2,14 @@ package clone
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"unsafe"
 
+	"github.com/Nigel2392/errors"
+	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
+	"github.com/Nigel2392/versatile/internal/registry"
 )
 
 type (
@@ -68,8 +72,10 @@ const (
 	CF_NOWRAP        CloneFlag = 1 << iota // don't allow wrapping, even if a wrap function is provided
 	CF_NOVALIDATE                          // don't validate if dst is actually settable
 	CF_KEEP_POINTERS                       // don't reset the pointer cache after before copy with a shared state
+	CF_NO_CACHE                            // do not use an internal state cache
 	CF_ONLY_PUB_FLDS                       // only public (non exported) struct fields can be cloned.
 	CF_NO_CONVS                            // don't allow conversions from, int32 to int64 (singular example)
+	CF_COPY_METHODS                        // allow for methods on src or dst to be used to copy src to dst
 )
 
 type State struct {
@@ -218,7 +224,7 @@ func (s *State) Step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool
 }
 
 func (s *State) __get_step(dstIfSrcElseSrc reflect.Type, src reflect.Type) (Step, bool) {
-	if s.cache != nil {
+	if s.cache != nil && !s.Flags.Is(CF_NO_CACHE) {
 		step, ok := s.cache.Step(dstIfSrcElseSrc, src)
 		if ok {
 			return step, true
@@ -245,11 +251,137 @@ func (s *State) StepInit(ctx context.Context, dst, src reflect.Type) (step Step,
 	return step, err
 }
 
+var (
+	_ctxTyp            = reflect.TypeFor[context.Context]()
+	_errTyp            = reflect.TypeFor[error]()
+	_callerTyp         = reflect.TypeFor[Caller]()
+	_stateTyp          = reflect.TypeFor[*State]()
+	_methodCCpyMethods = []string{"CCopy", "CCopyTo"}
+)
+
+func _checkCCpyMethod(src reflect.Value, m reflect.Method) error {
+	if m.Type.NumIn() == 1 {
+		return versatile.ErrArgCount.Wrapf(
+			"%s.%s (%s) must have at least dst as argument",
+			src.Type(), m.Name, m.Type).
+			// wrap
+			WithCause(ErrInvalid).
+			WithCause(registry.ErrNotFound)
+	}
+
+	if m.Type.NumOut() > 1 {
+		return versatile.ErrArgCount.Wrapf(
+			"%s.%s (%s) must return a single value of type error or nothing at all",
+			src.Type(), m.Name, m.Type).
+			// wrap
+			WithCause(ErrInvalid).
+			WithCause(registry.ErrNotFound)
+	}
+
+	if m.Type.NumOut() == 1 && m.Type.Out(1) != _errTyp {
+		return versatile.ErrArgCount.Wrapf(
+			"%s.%s (%s) must return a single value of type error or nothing at all",
+			src.Type(), m.Name, m.Type).
+			// wrap
+			WithCause(ErrInvalid).
+			WithCause(registry.ErrNotFound)
+	}
+
+	return nil
+}
+
 func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) error {
 	if err := s.validate(ctx, dst, src); err != nil {
 		return err
 	}
 
+	if s.Flags.Is(CF_COPY_METHODS) {
+		method, err := stepReg.MethodFor(src, _methodCCpyMethods, _checkCCpyMethod)
+		if err != nil {
+			if errors.Is(err, registry.ErrNotFound) {
+				// no custom copy method on src
+				// proceed with default copy
+				goto baseCpy
+			} else {
+				return err
+			}
+		}
+
+		var (
+			start        = 1
+			dstUsed      = false
+			curCallerTyp = reflect.TypeOf(caller)
+			numIn        = method.Type.NumIn()
+			argList      = make([]reflect.Value, numIn)
+			dst          = dst.Elem()
+			dstTyp       = dst.Type()
+		)
+
+		argList[0] = src
+
+		// add context argument if requested
+		if numIn > 1 {
+			if argTyp := method.Type.In(1); argTyp == _ctxTyp || _ctxTyp.AssignableTo(argTyp) {
+				start++
+				argList[1] = reflect.ValueOf(ctx)
+			}
+		}
+
+		for i := start; i < numIn; i++ {
+			argTyp := method.Type.In(i)
+			switch {
+			case argTyp == _stateTyp || _stateTyp.AssignableTo(argTyp):
+				// state argument
+				argList[i] = reflect.ValueOf(s)
+
+			case argTyp == dstTyp || dstTyp.AssignableTo(argTyp):
+				// dst direct assignment
+				argList[i] = dst
+				dstUsed = true
+
+			case argTyp == curCallerTyp || curCallerTyp.AssignableTo(argTyp),
+				argTyp == _callerTyp || _callerTyp.AssignableTo(argTyp):
+				// caller argument
+				argList[i] = reflect.ValueOf(caller)
+
+			case argTyp.Kind() == reflect.Interface && curCallerTyp.Implements(argTyp):
+				// convert the caller argument to expected iface
+				argList[i] = reflect.ValueOf(caller).Convert(argTyp)
+
+			case argTyp.Kind() == reflect.Interface && dstTyp.Implements(argTyp),
+				dstTyp.ConvertibleTo(argTyp):
+				// convert the dst argument to expected type
+				argList[i] = dst.Convert(argTyp)
+				dstUsed = true
+
+			default:
+				panic(fmt.Sprintf(
+					"invalid copy method signature, unknown arg type: %s for function %s with dst %s",
+					argTyp, method.Type, dst.Type(),
+				))
+			}
+		}
+
+		if !dstUsed {
+			panic(fmt.Sprintf(
+				"invalid copy method signature, dst is required for copy method %s.%s",
+				src.Type(), method.Func,
+			))
+		}
+
+		out := method.Func.Call(argList)
+		if len(out) == 0 {
+			return nil
+		}
+
+		if rErr := out[1]; rErr.IsValid() && !rErr.IsNil() {
+			return rErr.Interface().(error)
+		}
+
+		return nil
+	}
+
+baseCpy:
 	return s.copy(ctx, step, dst, src, caller)
 }
 

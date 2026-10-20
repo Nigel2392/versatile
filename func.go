@@ -308,8 +308,13 @@ func CastFunc[OUT Function](fn any, opts ...func(*FuncConfig)) (OUT, error) {
 }
 
 func Method[T Function](obj interface{}, nameOrNames any, opts ...func(*FuncConfig)) (n T, err error) {
+	_, n, err = MethodOf[T](obj, nameOrNames, opts...)
+	return n, err
+}
+
+func MethodOf[T Function](obj interface{}, nameOrNames any, opts ...func(*FuncConfig)) (m reflect.Method, n T, err error) {
 	if obj == nil {
-		return n, ErrNilObject
+		return m, n, ErrNilObject
 	}
 
 	var names []string
@@ -324,16 +329,19 @@ func Method[T Function](obj interface{}, nameOrNames any, opts ...func(*FuncConf
 
 	var (
 		orig = ReflectValue(obj)
+		ok   bool
 		name string
-		m    reflect.Value
+		mV   reflect.Value
 	)
 
 	for _, funcName := range names {
 		v := orig
 
 	checkvalid:
-		m = v.MethodByName(funcName)
-		if m.IsValid() {
+		t := v.Type()
+		m, ok = t.MethodByName(funcName)
+		if ok {
+			mV = v.Method(m.Index)
 			name = funcName
 			break
 		}
@@ -344,27 +352,27 @@ func Method[T Function](obj interface{}, nameOrNames any, opts ...func(*FuncConf
 		}
 	}
 
-	if !m.IsValid() {
-		return n, ErrMethodNotFound
+	if !mV.IsValid() {
+		return m, n, ErrMethodNotFound
 	}
 
 	var fnT = reflect.TypeOf(n)
-	converted, err := RCastFunc(fnT, m, opts...)
+	converted, err := RCastFunc(fnT, mV, opts...)
 	if err != nil {
-		return n, errors.Wrapf(err, "method %s on %T is not compatible with %v", name, obj, fnT)
+		return m, n, errors.Wrapf(err, "method %s on %T is not compatible with %v", name, obj, fnT)
 	}
 
 	var i = converted.Interface()
 	if i == nil {
-		return n, errors.Wrapf(ErrTypeMismatch, "method %s on %T is nil, cannot cast to %v", name, obj, fnT)
+		return m, n, errors.Wrapf(ErrTypeMismatch, "method %s on %T is nil, cannot cast to %v", name, obj, fnT)
 	}
 
-	n, ok := i.(T)
+	n, ok = i.(T)
 	if !ok {
-		return n, errors.Wrapf(ErrTypeMismatch, "method %s on %T is not of type %v, got %T", name, obj, fnT, i)
+		return m, n, errors.Wrapf(ErrTypeMismatch, "method %s on %T is not of type %v, got %T", name, obj, fnT, i)
 	}
 
-	return n, nil
+	return m, n, nil
 }
 
 func RCastFunc(out reflect.Type, fn any, opts ...func(*FuncConfig)) (reflect.Value, error) {

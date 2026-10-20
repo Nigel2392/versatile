@@ -87,6 +87,12 @@ func Copy(ctx context.Context, dst any, src any, opts ...func(*State)) (err erro
 	return rcopy(ctx, rvDst, rvSrc, opts)
 }
 
+var _exactTypeGet = []registry.Getter[Step]{registry.GetType[Step]}
+
+func _getterExactType(dst reflect.Type, src reflect.Type) []registry.Getter[Step] {
+	return _exactTypeGet
+}
+
 func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []func(*State)) (err error) {
 
 	var state *State
@@ -94,7 +100,6 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	if !ok {
 		_state = new(State{
 			pointers: make(map[oldPtr]newPtr),
-			cache:    &cacheRegistry{_steps: registry.NewTypeRegistry[Step](_stepFromReg)},
 		})
 	} else {
 		s := *_state
@@ -107,6 +112,10 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	// apply customisations to state
 	for _, opt := range opts {
 		opt(state)
+	}
+
+	if state.cache == nil && !state.Flags.Is(CF_NO_CACHE) {
+		state.cache = &cacheRegistry{_steps: registry.NewTypeRegistry(nil, registry.EXACT_IFACE, _getterExactType)}
 	}
 
 	if !bitcheck.Is(state.Flags, CF_KEEP_POINTERS) {

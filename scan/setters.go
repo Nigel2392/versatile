@@ -21,7 +21,7 @@ type (
 	ScanFunc   = func(dst reflect.Value, dstT reflect.Type, src reflect.Value, flags ScanFlag) (wasSet bool, err error)
 )
 
-var _reg = registry.NewTypeRegistry[ScanFunc](nil)
+var _reg = registry.NewTypeRegistry[ScanFunc](nil, registry.EXACT_IFACE, nil)
 
 const (
 	SF_NONE        ScanFlag = 0

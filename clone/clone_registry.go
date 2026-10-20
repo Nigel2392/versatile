@@ -3,6 +3,7 @@ package clone
 import (
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/Nigel2392/versatile/internal/registry"
 )
@@ -42,7 +43,8 @@ type ResettableRegistry interface {
 }
 
 type stepRegistry struct {
-	_steps *registry.TypeRegistry[Step]
+	_steps   *registry.TypeRegistry[Step]
+	_methods *registry.MethodsRegistry
 }
 
 func _stepFromReg(dst, src reflect.Type) []registry.Getter[Step] {
@@ -59,7 +61,8 @@ func _stepFromReg(dst, src reflect.Type) []registry.Getter[Step] {
 }
 
 var stepReg = new(stepRegistry{
-	_steps: registry.NewTypeRegistry(_stepFromReg),
+	_steps:   registry.NewTypeRegistry(&sync.Mutex{}, registry.NONE, _stepFromReg),
+	_methods: registry.NewMethods(),
 })
 
 func _checkIface(types map[any]Step, key registry.RegKey[reflect.Type], kindKey registry.RegKey[reflect.Kind]) (Step, bool) {
@@ -125,6 +128,10 @@ func (r *stepRegistry) Step(dst reflect.Type, src reflect.Type) (step Step, ok b
 	}
 
 	return r._steps.Get(dst, src)
+}
+
+func (r *stepRegistry) MethodFor(val reflect.Value, names []string, valid ...func(reflect.Value, reflect.Method) error) (reflect.Method, error) {
+	return r._methods.For(val, names, valid...)
 }
 
 type cacheRegistry struct {

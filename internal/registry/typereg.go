@@ -2,22 +2,42 @@ package registry
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
+	"sync"
+
+	"github.com/Nigel2392/versatile/bitcheck"
+)
+
+type Flag bitcheck.Flag
+
+const (
+	NONE        Flag = iota
+	EXACT_IFACE Flag = iota << 1
+	NOTFOUND_REG
 )
 
 type _TYPE = reflect.Type
 
-func NewTypeRegistry[T any](get func(dst, src reflect.Type) []Getter[T]) *TypeRegistry[T] {
-	return new(TypeRegistry[T]{
-		types: make(map[any]T),
+func NewTypeRegistry[T any](lock sync.Locker, flags Flag, get func(dst, src reflect.Type) []Getter[T]) *TypeRegistry[T] {
+	reg := new(TypeRegistry[T]{
+		flags: flags,
 		get:   get,
-		//	notFound: make(map[RegKey[reflect.Type]]struct{}),
+		lock:  lock,
+		types: make(map[any]T),
 		iface: interfaceReg[T]{
 			lookup:         make(map[reflect.Type]int),
 			checkers:       make([]*interfaceRegChecker[T], 0),
 			existsDstCache: make(map[reflect.Type]int),
 		},
 	})
+
+	if flags&NOTFOUND_REG == NOTFOUND_REG {
+		reg.notFound = make(map[RegKey[reflect.Type]]struct{})
+	}
+
+	return reg
 }
 
 type RegKey[T any] struct {
@@ -26,10 +46,12 @@ type RegKey[T any] struct {
 }
 
 type TypeRegistry[T any] struct {
-	types map[any]T
-	iface interfaceReg[T]
-	get   func(dst, src reflect.Type) []Getter[T]
-	//	notFound map[RegKey[reflect.Type]]struct{}
+	iface    interfaceReg[T]
+	types    map[any]T
+	get      func(dst, src reflect.Type) []Getter[T]
+	notFound map[RegKey[reflect.Type]]struct{}
+	lock     sync.Locker
+	flags    Flag
 }
 
 type interfaceReg[T any] struct {
@@ -51,19 +73,54 @@ func (reg *TypeRegistry[T]) getters(dst, src reflect.Type) []Getter[T] {
 	return reg.get(dst, src)
 }
 
+func (reg *TypeRegistry[T]) WithLock(l sync.Locker) {
+	reg.lock = l
+}
+
+func (reg *TypeRegistry[T]) Clone() *TypeRegistry[T] {
+	if reg.lock != nil {
+		reg.lock.Lock()
+		defer reg.lock.Unlock()
+	}
+
+	return &TypeRegistry[T]{
+		iface: interfaceReg[T]{
+			lookup:         maps.Clone(reg.iface.lookup),
+			existsDstCache: maps.Clone(reg.iface.existsDstCache),
+			checkers:       slices.Clone(reg.iface.checkers),
+		},
+		types:    maps.Clone(reg.types),
+		notFound: maps.Clone(reg.notFound),
+		get:      reg.get,
+		lock:     nil, // do not clone lock
+		flags:    reg.flags,
+	}
+}
+
 func (reg *TypeRegistry[T]) Clear() int {
+	if reg.lock != nil {
+		reg.lock.Lock()
+		defer reg.lock.Unlock()
+	}
+
 	l := len(reg.types) + len(reg.iface.checkers)
 	clear(reg.types)
-	//	clear(reg.notFound)
+	clear(reg.notFound)
 	reg.iface = interfaceReg[T]{
 		lookup:         make(map[reflect.Type]int),
 		checkers:       make([]*interfaceRegChecker[T], 0),
 		existsDstCache: make(map[reflect.Type]int),
 	}
+
 	return l
 }
 
 func (reg *TypeRegistry[T]) Register(dstType reflect.Type, srcOrT ...any) (overwrite bool) {
+	if reg.lock != nil {
+		reg.lock.Lock()
+		defer reg.lock.Unlock()
+	}
+
 	var (
 		key any
 		v   T
@@ -86,6 +143,11 @@ func (reg *TypeRegistry[T]) Register(dstType reflect.Type, srcOrT ...any) (overw
 }
 
 func (reg *TypeRegistry[T]) RegisterKind(dstKind, srcKind reflect.Kind, checker T) (overwrite bool) {
+	if reg.lock != nil {
+		reg.lock.Lock()
+		defer reg.lock.Unlock()
+	}
+
 	var key any
 	switch {
 	case dstKind != 0 && srcKind != 0:
@@ -103,6 +165,11 @@ func (reg *TypeRegistry[T]) RegisterKind(dstKind, srcKind reflect.Kind, checker 
 }
 
 func (reg *TypeRegistry[T]) InterfaceRegister(iface reflect.Type, scan T) (overwrite bool) {
+	if reg.lock != nil {
+		reg.lock.Lock()
+		defer reg.lock.Unlock()
+	}
+
 	var (
 		checker *interfaceRegChecker[T]
 		pos, ok = reg.iface.lookup[iface]
@@ -128,23 +195,45 @@ func (reg *TypeRegistry[T]) InterfaceRegister(iface reflect.Type, scan T) (overw
 
 type Getter[T any] = func(types map[any]T, key RegKey[reflect.Type], kindKey RegKey[reflect.Kind]) (T, bool)
 
-func (reg *TypeRegistry[T]) Get(dstTyp reflect.Type, srcTyp reflect.Type) (obj T, found bool) {
+type locker struct {
+	sync.Locker
+}
 
+func (l locker) lock() {
+	if l.Locker != nil {
+		l.Locker.Lock()
+	}
+}
+
+func (l locker) unlock() {
+	if l.Locker != nil {
+		l.Locker.Unlock()
+	}
+}
+
+func (reg *TypeRegistry[T]) Get(dstTyp reflect.Type, srcTyp reflect.Type) (obj T, found bool) {
 	if len(reg.types) == 0 && len(reg.iface.checkers) == 0 {
 		return obj, false
 	}
 
-	//	if _, notExists := reg.notFound[RegKey[reflect.Type]{Dst: dstTyp, Src: srcTyp}]; notExists {
-	//		return obj, false
-	//	}
+	if reg.flags&NOTFOUND_REG == NOTFOUND_REG {
+		if _, notExists := reg.notFound[RegKey[reflect.Type]{Dst: dstTyp, Src: srcTyp}]; notExists {
+			return obj, false
+		}
+	}
 
 	var (
 		idx int
 		ok  bool
+		mu  = locker{reg.lock}
 	)
 
 	// skip until later on if dst kind is an interface
-	if dstTyp.Kind() != reflect.Interface {
+	if reg.flags&EXACT_IFACE == EXACT_IFACE && dstTyp.Kind() != reflect.Interface {
+		goto checkReg
+	}
+
+	if len(reg.iface.checkers) == 0 {
 		goto checkReg
 	}
 
@@ -161,12 +250,16 @@ func (reg *TypeRegistry[T]) Get(dstTyp reflect.Type, srcTyp reflect.Type) (obj T
 	case !ok:
 		for idx, iScan := range reg.iface.checkers {
 			if dstTyp.Implements(iScan.chk) {
+				mu.lock()
 				reg.iface.existsDstCache[dstTyp] = idx
+				mu.unlock()
 				return iScan.scan, true
 			}
 		}
 
+		mu.lock()
 		reg.iface.existsDstCache[dstTyp] = -1
+		mu.unlock()
 	}
 
 checkReg:
@@ -182,6 +275,12 @@ checkReg:
 		if found {
 			return obj, true
 		}
+	}
+
+	if reg.flags&NOTFOUND_REG == NOTFOUND_REG {
+		mu.lock()
+		reg.notFound[RegKey[reflect.Type]{Dst: dstTyp, Src: srcTyp}] = struct{}{}
+		mu.unlock()
 	}
 
 	return obj, false

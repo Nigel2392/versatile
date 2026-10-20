@@ -1,9 +1,11 @@
 package clone
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"slices"
 	"testing"
 )
 
@@ -205,6 +207,20 @@ type biggerStruct struct {
 	float64
 }
 
+type copyStruct struct {
+	ID               int
+	Name             string
+	Integers         []int64
+	copyMethodCalled bool
+}
+
+func (c *copyStruct) CCopy(ctx context.Context, dst *copyStruct) {
+	dst.ID = c.ID
+	dst.Name = c.Name
+	dst.Integers = slices.Clone(c.Integers)
+	c.copyMethodCalled = true
+}
+
 func TestSteps(t *testing.T) {
 	// FLAGFN := Flag(CF_NOWRAP)
 	FLAGFN := Flag(CF_INVALID)
@@ -349,6 +365,25 @@ func TestSteps(t *testing.T) {
 				}
 			})
 		})
+	})
+
+	t.Run("CopyMethod", func(t *testing.T) {
+		var (
+			i = new(copyStruct)
+			s = &copyStruct{
+				ID:       69,
+				Name:     "CopyMethod__copyStructName",
+				Integers: []int64{3, 4, 5},
+			}
+		)
+
+		if err := Copy(t.Context(), &i, s, Flag(CF_COPY_METHODS)); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if !s.copyMethodCalled {
+			t.Fatalf("expected copy method to be called:\n\t%+v\n\t%+v", i, s)
+		}
 	})
 
 	for _, test := range stepTests {
