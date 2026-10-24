@@ -31,12 +31,12 @@ func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) 
 	return f, nil
 }
 
-func (f PointerStep) PreCopy(ctx context.Context, s *State, dst, src reflect.Value) error {
+func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
 	target := dst.Elem()
 
 	if src.IsNil() {
 		target.Set(reflect.Zero(target.Type()))
-		return ErrObjectCached
+		return nil
 	}
 
 	var allocTyp reflect.Type
@@ -50,27 +50,10 @@ func (f PointerStep) PreCopy(ctx context.Context, s *State, dst, src reflect.Val
 
 	target.Set(newPtr)
 	if cached {
-		return ErrObjectCached
-	}
-
-	return nil
-}
-
-func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
-	err := f.PreCopy(ctx, s, dst, src)
-	if err != nil {
-		if !errors.Is(err, ErrObjectCached) {
-			return err
-		}
 		return nil
 	}
 
-	dstElem := dst.Elem()
-	if dstElem.Kind() == reflect.Interface {
-		dstElem = dstElem.Elem()
-	}
-
-	return s.StepCopy(ctx, f.Step, dstElem, src.Elem(), ReferenceCaller{Ref: dstElem})
+	return s.StepCopy(ctx, f.Step, newPtr, src.Elem(), ReferenceCaller{Ref: newPtr})
 }
 
 type InterfaceStep struct {
