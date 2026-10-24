@@ -3,7 +3,7 @@ package clone
 import (
 	"context"
 
-	"github.com/Nigel2392/versatile/internal/registry"
+	"github.com/Nigel2392/versatile/registry"
 )
 
 type stateContextKey struct{}

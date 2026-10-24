@@ -9,7 +9,7 @@ import (
 	"github.com/Nigel2392/errors"
 	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
-	"github.com/Nigel2392/versatile/internal/registry"
+	"github.com/Nigel2392/versatile/registry"
 )
 
 type (
@@ -76,6 +76,7 @@ const (
 	CF_ONLY_PUB_FLDS                       // only public (non exported) struct fields can be cloned.
 	CF_NO_CONVS                            // don't allow conversions from, int32 to int64 (singular example)
 	CF_COPY_METHODS                        // allow for methods on src or dst to be used to copy src to dst
+	CF_COPY_MIXINS                         // allow for pre/post copy mixin calling
 )
 
 type State struct {
@@ -259,7 +260,7 @@ var (
 	_methodCCpyMethods = []string{"CCopy", "CCopyTo"}
 )
 
-func _checkCCpyMethod(src reflect.Value, m reflect.Method) error {
+func _checkCCpyMethod(src reflect.Value, m *reflect.Method) error {
 	if m.Type.NumIn() == 1 {
 		return versatile.ErrArgCount.Wrapf(
 			"%s.%s (%s) must have at least dst as argument",
@@ -293,6 +294,45 @@ func _checkCCpyMethod(src reflect.Value, m reflect.Method) error {
 func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) error {
 	if err := s.validate(ctx, dst, src); err != nil {
 		return err
+	}
+
+	var objWasCached bool
+	if s.Flags.Is(CF_COPY_MIXINS) {
+		for mixin, d := range PreCopyMixins(step) {
+			if d == 0 {
+				continue
+			}
+
+			err := mixin.PreCopy(ctx, s, dst, src)
+			if err != nil {
+				if errors.Is(err, ErrObjectCached) {
+					objWasCached = true
+					break
+				}
+				return err
+			}
+		}
+
+		if !objWasCached {
+			if p, ok := step.(PostCopyMixinDefiner); ok {
+				defer func() {
+					for mixin, d := range PostCopyMixins(p) {
+						if d == 0 {
+							continue
+						}
+
+						err := mixin.PostCopy(ctx, s, dst, src)
+						if err != nil {
+
+						}
+					}
+				}()
+			}
+		}
+	}
+
+	if objWasCached {
+		return nil
 	}
 
 	if s.Flags.Is(CF_COPY_METHODS) {

@@ -10,7 +10,7 @@ import (
 	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
 	"github.com/Nigel2392/versatile/internal/danger"
-	"github.com/Nigel2392/versatile/internal/registry"
+	"github.com/Nigel2392/versatile/registry"
 )
 
 var (

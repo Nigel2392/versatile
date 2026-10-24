@@ -1,11 +1,5 @@
-github.com/Nigel2392/errors v1.0.1 h1:LDhL6OM5iXRehi/nhDp6xmuwtlAqXE6+Z8MiyP8VxYo=
-github.com/Nigel2392/errors v1.0.1/go.mod h1:AV6mIkaeDgEi9vJKMpG9/6ni4fRnSnrqcfXWwjKbGHE=
 github.com/Nigel2392/errors v1.0.4 h1:t9JA1HJbmUKsOxba2e2c53zvFr3YwT1Ro08jkqhayyw=
 github.com/Nigel2392/errors v1.0.4/go.mod h1:k19uWtXixwPkXY+rIbWFI5uWjPDo7ZxdCJBdnEbmEUE=
-github.com/Nigel2392/goldcrest v1.0.4 h1:Xx+QLht6QjJ3Gg9uksgc6Ye1XjbtzQ1208ClZwoVWsg=
-github.com/Nigel2392/goldcrest v1.0.4/go.mod h1:UpnPrYJqZY/b7TkoVKdoNNPKTlQtld+fsrZEA98c1c0=
-github.com/Nigel2392/goldcrest v1.0.6 h1:7D+gnoUWPZLxHp36u0PCNs2FF9qV/tESmBip4PEdxF8=
-github.com/Nigel2392/goldcrest v1.0.6/go.mod h1:FITH+WXlpWLD4PaZ80aUHUZE9n2Z/lx1mkeRFEr5e9M=
 github.com/Nigel2392/goldcrest v1.0.7 h1:cQV71lWodn9MUAME0VVhA/E65TGwPikdm/nv5vaaLBY=
 github.com/Nigel2392/goldcrest v1.0.7/go.mod h1:FITH+WXlpWLD4PaZ80aUHUZE9n2Z/lx1mkeRFEr5e9M=
 github.com/Nigel2392/tags v1.0.0 h1:KR7VZosoKjksv0uYQDQp03iOo7l04MhCZhCjDeLIChg=
