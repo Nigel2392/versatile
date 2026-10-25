@@ -101,6 +101,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		_state = new(State{
 			pointers: make(map[oldPtr]newPtr),
 		})
+		ctx = context.WithValue(ctx, stateContextKey{}, state)
 	} else {
 		s := *_state
 		_state = &s
