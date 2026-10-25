@@ -9,6 +9,7 @@ import (
 	"github.com/Nigel2392/errors"
 	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
+	"github.com/Nigel2392/versatile/internal/develop"
 	"github.com/Nigel2392/versatile/registry"
 )
 
@@ -122,6 +123,14 @@ func WrapStep(fn func(*State, Step) Step) func(s *State) {
 // If dstVal is a pointer, and it's [Elem] method returns a value of type [newTyp]
 // then [State.New] assumes it is safe to return (and cache) [dstVal].
 func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type) (newOrCached reflect.Value, cached bool) {
+	if develop.DEV {
+		defer func() {
+			if r := recover(); r != nil {
+				panic(fmt.Sprintf("New(%s, %s, %s)", keyPtr.Type(), dstVal.Type(), newTyp))
+			}
+		}()
+	}
+
 	op := getCacheKey(keyPtr)
 	if v, ok := s.pointers[op]; ok {
 		return reflect.NewAt(newTyp, v), true
@@ -148,6 +157,14 @@ func (s *State) New(keyPtr reflect.Value, dstVal reflect.Value, newTyp reflect.T
 //
 // If dstVal can be used, the slice is grown to length [l], with it's capacity and len set to [l].
 func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, l int) (n reflect.Value, wasCached bool) {
+	if develop.DEV {
+		defer func() {
+			if r := recover(); r != nil {
+				panic(fmt.Sprintf("MakeSlice(%s, %s, %s, %d)", oldPtr.Type(), dstVal.Type(), newTyp, l))
+			}
+		}()
+	}
+
 	if newTyp.Kind() == reflect.Interface {
 		newTyp = oldPtr.Type()
 	}
@@ -190,6 +207,14 @@ func (s *State) MakeSlice(oldPtr reflect.Value, dstVal reflect.Value, newTyp ref
 // If dstVal is a pointer, and it's [Elem] method returns a value of type [newTyp]
 // then [State.New] assumes it is safe to return (and cache) [dstVal].
 func (s *State) MakeMap(oldPtr reflect.Value, dstVal reflect.Value, newTyp reflect.Type, _len int) (newOrCached reflect.Value, wasCached bool) {
+	if develop.DEV {
+		defer func() {
+			if r := recover(); r != nil {
+				panic(fmt.Sprintf("MakeMap(%s, %s, %s, %d)", oldPtr.Type(), dstVal.Type(), newTyp, _len))
+			}
+		}()
+	}
+
 	op := getCacheKey(oldPtr)
 	if v, ok := s.pointers[op]; ok {
 		return newMapFromPtr(newTyp, unsafe.Pointer(v)), true

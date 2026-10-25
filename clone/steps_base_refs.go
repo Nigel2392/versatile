@@ -2,9 +2,11 @@ package clone
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/Nigel2392/errors"
+	"github.com/Nigel2392/versatile/internal/develop"
 )
 
 type PointerStep struct {
@@ -31,25 +33,74 @@ func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) 
 	return f, nil
 }
 
-func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
-	target := dst.Elem()
+func NewDstForSrc(s *State, dst, src reflect.Value) (newPtr reflect.Value, zero, cached bool) {
+	for src.Kind() == reflect.Interface {
+		src = src.Elem()
+		if !src.IsValid() {
+			dst.Set(reflect.Zero(dst.Type()))
+			return dst, true, false
+		}
+	}
 
-	if src.IsNil() {
-		target.Set(reflect.Zero(target.Type()))
-		return nil
+	if src.Kind() == reflect.Pointer && src.IsNil() {
+		if develop.DEV {
+			develop.Logf("src is nil, setting dst to zero of %s", src.Type())
+		}
+
+		dst.Set(reflect.Zero(src.Type()))
+		return dst, true, false
 	}
 
 	var allocTyp reflect.Type
-	if target.Kind() == reflect.Interface {
-		allocTyp = src.Type().Elem()
-	} else {
-		allocTyp = target.Type().Elem()
+	switch dst.Kind() {
+	case reflect.Pointer:
+		allocTyp = dst.Type().Elem()
+
+	case reflect.Interface:
+		if src.Kind() == reflect.Pointer {
+			allocTyp = src.Type().Elem()
+		} else {
+			allocTyp = src.Type()
+		}
+
+	default:
+		allocTyp = dst.Type()
 	}
 
-	newPtr, cached := s.New(src, target, allocTyp)
+	if develop.DEV {
+		defer func() {
+			var newPtrStr any
+			if newPtr.Kind() == reflect.Invalid {
+				newPtrStr = newPtr.Kind()
+			} else {
+				newPtrStr = newPtr.Type()
+			}
 
-	target.Set(newPtr)
-	if cached {
+			if r := recover(); r != nil {
+				panic(fmt.Sprintf(
+					"NewDstValue(\n\tdst: %s\n\tsrc: %s\n\tallocTyp: %s\n\tnewPtrTyp: %s\n)",
+					dst.Type(), src.Type(), allocTyp, newPtrStr,
+				))
+			} else {
+				develop.Logf(
+					"NewDstValue(\n\tdst: %s\n\tsrc: %s\n\tallocTyp: %s\n\tnewPtrTyp: %s\n)",
+					dst.Type(), src.Type(), allocTyp, newPtrStr,
+				)
+			}
+		}()
+	}
+
+	newPtr, cached = s.New(src, dst, allocTyp)
+
+	dst.Set(newPtr)
+
+	return newPtr, zero, cached
+}
+
+func (f PointerStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) error {
+	target := dst.Elem()
+	newPtr, zero, cached := NewDstForSrc(s, target, src)
+	if cached || zero {
 		return nil
 	}
 
