@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/Nigel2392/errors"
 	"github.com/Nigel2392/versatile"
 	"github.com/Nigel2392/versatile/bitcheck"
 	"github.com/Nigel2392/versatile/internal/danger"
@@ -101,7 +100,6 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		_state = new(State{
 			pointers: make(map[oldPtr]newPtr),
 		})
-		ctx = context.WithValue(ctx, stateContextKey{}, state)
 	} else {
 		s := *_state
 		_state = &s
@@ -123,56 +121,8 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		clear(state.pointers)
 	}
 
-	var (
-		step   Step
-		srcTyp = src.Type()
-		dstTyp = dst.Type()
-	)
-
-	// if dst is pointer to interface, see if step registered
-	// for said interface
-	if dstTyp.Kind() == reflect.Pointer {
-
-		// handle copy(****int, ***int)
-		var dptrs int
-		for dstTyp.Kind() == reflect.Pointer {
-			dstTyp = dstTyp.Elem()
-			dptrs++
-		}
-
-		var sptrs int
-		var sdstTyp = srcTyp
-		for sdstTyp.Kind() == reflect.Pointer {
-			sdstTyp = sdstTyp.Elem()
-			sptrs++
-		}
-
-		// -1 because dst should always be ptr for src
-		dptrs = (dptrs - 1) - sptrs
-
-		var d = dst
-		for i := range dptrs {
-			if dst.IsNil() && i > 0 {
-				d.Set(reflect.Zero(dst.Type()))
-			}
-			d = dst
-			dst = dst.Elem()
-		}
-
-		dstTyp = dst.Type().Elem()
-	}
-
-	// retrieve copy steps
-	step, err = state.StepInit(ctx, dstTyp, srcTyp)
-	if err != nil {
-		return errors.Wrapf(
-			err, "%s => %s",
-			srcTyp, dstTyp,
-		)
-	}
-
 	// copy to dst
-	err = state.StepCopy(ctx, step, dst, src, TopLevelCaller{Val: dst})
+	err = state._Copy(ctx, dst, src, TopLevelCaller{Val: dst})
 
 	// ensure state lives through all steps
 	runtime.KeepAlive(_state)

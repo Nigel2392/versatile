@@ -315,6 +315,9 @@ func _checkCCpyMethod(src reflect.Value, m *reflect.Method) error {
 	return nil
 }
 
+// StepCopy is to be used inside of steps to call [Step.Copy] method
+//
+// without calling [StepCopy] certain features and functionality are not honored
 func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) error {
 	if err := s.validate(ctx, dst, src); err != nil {
 		return err
@@ -408,6 +411,90 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 
 baseCpy:
 	return s.copy(ctx, step, dst, src, caller)
+}
+
+// [State.Copy] is to be used inside of the [Copy] function stack
+func (s *State) Copy[DST, SRC any, CALLER Caller](ctx context.Context, dst DST, src SRC, caller CALLER) (err error) {
+	var (
+		rvDst = versatile.ReflectValue(dst)
+		rvSrc = versatile.ReflectValue(src)
+	)
+
+	if rvDst.Kind() != reflect.Pointer || rvDst.IsNil() {
+		return ErrNotPointer.Wrapf("%s is not a pointer or is nil, cannot copy src %s to dst", rvDst.Type(), rvSrc.Type())
+	}
+
+	if rvSrc.Kind() == reflect.Invalid {
+		rvDst.Elem().Set(reflect.Zero(rvDst.Elem().Type()))
+		return nil
+	}
+
+	return s._Copy(ctx, rvDst, rvSrc, caller)
+}
+
+// [State.Copy] is to be used inside of the [Copy] function stack
+func (s *State) _Copy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.Value, caller CALLER) (err error) {
+
+	var (
+		step   Step
+		srcTyp = rvSrc.Type()
+		dstTyp = rvDst.Type()
+	)
+
+	// if dst is pointer to interface, see if step registered
+	// for said interface
+	if dstTyp.Kind() == reflect.Pointer {
+
+		// handle copy(****int, ***int)
+		var dptrs int
+		for dstTyp.Kind() == reflect.Pointer {
+			dstTyp = dstTyp.Elem()
+			dptrs++
+		}
+
+		var sptrs int
+		var sdstTyp = srcTyp
+		for sdstTyp.Kind() == reflect.Pointer {
+			sdstTyp = sdstTyp.Elem()
+			sptrs++
+		}
+
+		// src may be passed as ******T, but should always end up as *T
+		if sptrs > 1 {
+			for sptrs > 1 {
+				rvSrc = rvSrc.Elem()
+				sptrs--
+			}
+
+			srcTyp = rvSrc.Type()
+		}
+
+		// -1 because dst should always be ptr for src
+		dptrs = (dptrs - 1) - sptrs
+
+		var d = rvDst
+		for i := range dptrs {
+			if rvDst.IsNil() && i > 0 {
+				d.Set(reflect.Zero(rvDst.Type()))
+			}
+			d = rvDst
+			rvDst = rvDst.Elem()
+		}
+
+		dstTyp = rvDst.Type().Elem()
+	}
+
+	// retrieve copy steps
+	step, err = s.StepInit(ctx, dstTyp, srcTyp)
+	if err != nil {
+		return errors.Wrapf(
+			err, "%s => %s",
+			srcTyp, dstTyp,
+		)
+	}
+
+	// copy to dst
+	return s.StepCopy(ctx, step, rvDst, rvSrc, caller)
 }
 
 func (s *State) validate(ctx context.Context, dst, src reflect.Value) error {

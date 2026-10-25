@@ -87,3 +87,56 @@ func TestEdge_NilPointerInInterface(t *testing.T) {
 		t.Fatalf("Expected typed nil pointer, got %v", dst.I)
 	}
 }
+
+type pointerArgTest struct {
+	id   int
+	name string
+}
+
+func TestEdge_WeirdPointerArgumentsSrc(t *testing.T) {
+	var (
+		dst     *pointerArgTest
+		____src = &pointerArgTest{
+			id:   5,
+			name: "WeirdPointerArgumentsSrc",
+		}
+		___src = &____src
+		__src  = &___src
+		_src   = &__src
+		src    = &_src
+	)
+
+	mustCopy(t, &dst, &src)
+
+	if dst.name != "WeirdPointerArgumentsSrc" {
+		t.Fatalf("Expected id to be %d, got %d", 5, dst.id)
+	}
+
+	if dst.name != "WeirdPointerArgumentsSrc" {
+		t.Fatalf("Expected name to be %q, got %q", "WeirdPointerArgumentsSrc", dst.name)
+	}
+}
+
+func TestEdge_WeirdPointerArgumentsDst(t *testing.T) {
+	var (
+		____dst *pointerArgTest
+		___dst  = &____dst
+		__dst   = &___dst
+		_dst    = &__dst
+		dst     = &_dst
+		src     = &pointerArgTest{
+			id:   5,
+			name: "WeirdPointerArgumentsDst",
+		}
+	)
+
+	mustCopy(t, &dst, &src)
+
+	if ____dst.name != "WeirdPointerArgumentsDst" {
+		t.Fatalf("Expected id to be %d, got %d", 5, ____dst.id)
+	}
+
+	if ____dst.name != "WeirdPointerArgumentsDst" {
+		t.Fatalf("Expected name to be %q, got %q", "WeirdPointerArgumentsDst", ____dst.name)
+	}
+}

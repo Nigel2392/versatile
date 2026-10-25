@@ -6,7 +6,24 @@ import (
 	"github.com/Nigel2392/versatile/registry"
 )
 
-type stateContextKey struct{}
+type cloneContextKey string
+
+const (
+	stateContextKey cloneContextKey = "clone.State"
+)
+
+type stateContext struct {
+	context.Context
+	state *State
+}
+
+func (s *stateContext) Value(key any) any {
+	if key == stateContextKey {
+		return s.state
+	}
+
+	return s.Context.Value(key)
+}
 
 // A shared state can be used to provide a shared step cache, optional shared pointer cache
 // and any other options that provide functionality to the state.
@@ -24,7 +41,7 @@ func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Con
 		})
 
 		// only need to override context when state is not present already
-		ctx = context.WithValue(ctx, stateContextKey{}, state)
+		ctx = context.WithValue(ctx, stateContextKey, state)
 	}
 
 	for _, opt := range opts {
@@ -39,6 +56,6 @@ func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Con
 }
 
 func StateFromContext(ctx context.Context) (*State, bool) {
-	s, ok := ctx.Value(stateContextKey{}).(*State)
+	s, ok := ctx.Value(stateContextKey).(*State)
 	return s, ok
 }
