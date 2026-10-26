@@ -377,7 +377,7 @@ func TestSteps(t *testing.T) {
 			}
 		)
 
-		if err := Copy(t.Context(), &i, s, Flag(CF_COPY_METHODS)); err != nil {
+		if err := Copy(t.Context(), &i, s); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 

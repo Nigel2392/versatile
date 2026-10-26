@@ -69,14 +69,14 @@ func (t MapCaller) Value() reflect.Value {
 }
 
 const (
-	CF_INVALID       CloneFlag = iota
-	CF_NOWRAP        CloneFlag = 1 << iota // don't allow wrapping, even if a wrap function is provided
-	CF_NOVALIDATE                          // don't validate if dst is actually settable
-	CF_KEEP_POINTERS                       // don't reset the pointer cache after before copy with a shared state
-	CF_NO_CACHE                            // do not use an internal state cache
-	CF_ONLY_PUB_FLDS                       // only public (non exported) struct fields can be cloned.
-	CF_NO_CONVS                            // don't allow conversions from, int32 to int64 (singular example)
-	CF_COPY_METHODS                        // allow for methods on src or dst to be used to copy src to dst
+	CF_INVALID         CloneFlag = iota
+	CF_NOWRAP          CloneFlag = 1 << iota // don't allow wrapping, even if a wrap function is provided
+	CF_NOVALIDATE                            // don't validate if dst is actually settable
+	CF_KEEP_POINTERS                         // don't reset the pointer cache after before copy with a shared state
+	CF_NO_CACHE                              // do not use an internal state cache
+	CF_ONLY_PUB_FLDS                         // only public (non exported) struct fields can be cloned.
+	CF_NO_CONVS                              // don't allow conversions from, int32 to int64 (singular example)
+	CF_NO_COPY_METHODS                       // do not allow for methods on src or dst to be used to copy src to dst
 )
 
 type State struct {
@@ -323,7 +323,7 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 		return err
 	}
 
-	if s.Flags.Is(CF_COPY_METHODS) {
+	if !s.Flags.Is(CF_NO_COPY_METHODS) {
 		method, err := stepReg.MethodFor(src, _methodCCpyMethods, _checkCCpyMethod)
 		if err != nil {
 			if errors.Is(err, registry.ErrNotFound) {
