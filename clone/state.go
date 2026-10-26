@@ -303,7 +303,7 @@ func _checkCCpyMethod(src reflect.Value, m *reflect.Method) error {
 			WithCause(registry.ErrNotFound)
 	}
 
-	if m.Type.NumOut() == 1 && m.Type.Out(1) != _errTyp {
+	if m.Type.NumOut() == 1 && m.Type.Out(0) != _errTyp {
 		return versatile.ErrArgCount.Wrapf(
 			"%s.%s (%s) must return a single value of type error or nothing at all",
 			src.Type(), m.Name, m.Type).
@@ -315,7 +315,7 @@ func _checkCCpyMethod(src reflect.Value, m *reflect.Method) error {
 	return nil
 }
 
-// StepCopy is to be used inside of steps to call [Step.Copy] method
+// StepCopy is to be used inside of steps to call [Step.Copy] method on any sub-steps.
 //
 // without calling [StepCopy] certain features and functionality are not honored
 func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) error {
@@ -402,7 +402,7 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 			return nil
 		}
 
-		if rErr := out[1]; rErr.IsValid() && !rErr.IsNil() {
+		if rErr := out[0]; rErr.IsValid() && !rErr.IsNil() {
 			return rErr.Interface().(error)
 		}
 
@@ -441,8 +441,6 @@ func (s *State) _Copy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.V
 		dstTyp = rvDst.Type()
 	)
 
-	// if dst is pointer to interface, see if step registered
-	// for said interface
 	if dstTyp.Kind() == reflect.Pointer {
 
 		// handle copy(****int, ***int)

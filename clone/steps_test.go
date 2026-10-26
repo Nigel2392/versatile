@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
-	"slices"
 	"testing"
 )
 
@@ -214,11 +213,12 @@ type copyStruct struct {
 	copyMethodCalled bool
 }
 
-func (c *copyStruct) CCopy(ctx context.Context, dst *copyStruct) {
+func (c *copyStruct) CCopy(ctx context.Context, s *State, dst *copyStruct) error {
 	dst.ID = c.ID
 	dst.Name = c.Name
-	dst.Integers = slices.Clone(c.Integers)
+	err := s.Copy(ctx, &dst.Integers, c.Integers, TopLevelCaller{reflect.ValueOf(dst.Integers)})
 	c.copyMethodCalled = true
+	return err
 }
 
 func TestSteps(t *testing.T) {
@@ -383,6 +383,20 @@ func TestSteps(t *testing.T) {
 
 		if !s.copyMethodCalled {
 			t.Fatalf("expected copy method to be called:\n\t%+v\n\t%+v", i, s)
+		}
+
+		if i.copyMethodCalled {
+			t.Fatal("expected copyMethodCalled to be false on dst")
+		}
+
+		if !reflect.DeepEqual(i.Integers, s.Integers) {
+			t.Fatal("dst.Integers != src.Integers")
+		}
+
+		s.Integers[0] = 1
+
+		if i.Integers[0] == 1 {
+			t.Fatal("*dst.Integers[0] == *src.Integers[0]")
 		}
 	})
 
