@@ -134,6 +134,7 @@ findLoop:
 		m.mu.Lock()
 		m.tCache[key] = storedMethod{
 			derefs: derefs,
+			method: rm,
 		}
 		m.mu.Unlock()
 		return rv, rm, nil
