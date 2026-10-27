@@ -336,27 +336,13 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 		}
 
 		var (
-			dptr         int
 			start        = 1
-			dstUsed      = false
 			curCallerTyp = reflect.TypeOf(caller)
 			numIn        = method.Type.NumIn()
 			argList      = make([]reflect.Value, numIn)
+			chkDst       = dst
 			dstTyp       = dst.Type()
 		)
-
-		for dstTyp.Kind() == reflect.Pointer {
-			dstTyp = dstTyp.Elem()
-			dptr++
-		}
-
-		if dptr > 1 {
-			for range dptr - 1 {
-				dst = dst.Elem()
-			}
-
-			dstTyp = dst.Type()
-		}
 
 		argList[0] = arg0
 
@@ -368,17 +354,55 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 			}
 		}
 
+		var dstIndex = -1
+	dstArgLoop:
+		for {
+			if dstTyp.Kind() == reflect.Pointer {
+				if chkDst.IsNil() {
+					// If the intermediate pointer cannot be set, traversal must stop.
+					if !chkDst.CanSet() {
+						return fmt.Errorf("invalid copy method signature, intermediate destination pointer %s is nil and unsettable", dstTyp)
+					}
+					// Allocate the underlying type and point to it.
+					chkDst.Set(reflect.New(dstTyp.Elem()))
+				}
+			}
+
+			for i := start; i < numIn; i++ {
+				argTyp := method.Type.In(i)
+
+				switch {
+				case argTyp == dstTyp || dstTyp.AssignableTo(argTyp):
+					// dst direct assignment
+					argList[i] = chkDst
+					dstIndex = i
+					break dstArgLoop
+
+				case argTyp.Kind() == reflect.Interface && dstTyp.Implements(argTyp),
+					dstTyp.ConvertibleTo(argTyp):
+					// convert the dst argument to expected type
+					argList[i] = chkDst.Convert(argTyp)
+					dstIndex = i
+					break dstArgLoop
+				}
+			}
+
+			if dstTyp.Kind() == reflect.Pointer {
+				chkDst = chkDst.Elem()
+				dstTyp = chkDst.Type()
+			}
+		}
+
 		for i := start; i < numIn; i++ {
+			if i == dstIndex {
+				continue
+			}
+
 			argTyp := method.Type.In(i)
 			switch {
 			case argTyp == _stateTyp || _stateTyp.AssignableTo(argTyp):
 				// state argument
 				argList[i] = reflect.ValueOf(s)
-
-			case argTyp == dstTyp || dstTyp.AssignableTo(argTyp):
-				// dst direct assignment
-				argList[i] = dst
-				dstUsed = true
 
 			case argTyp == curCallerTyp || curCallerTyp.AssignableTo(argTyp),
 				argTyp == _callerTyp || _callerTyp.AssignableTo(argTyp):
@@ -389,21 +413,15 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 				// convert the caller argument to expected iface
 				argList[i] = reflect.ValueOf(caller).Convert(argTyp)
 
-			case argTyp.Kind() == reflect.Interface && dstTyp.Implements(argTyp),
-				dstTyp.ConvertibleTo(argTyp):
-				// convert the dst argument to expected type
-				argList[i] = dst.Convert(argTyp)
-				dstUsed = true
-
 			default:
 				panic(fmt.Sprintf(
-					"invalid copy method signature, unknown arg type: %s for function %s with dst %s",
-					argTyp, method.Type, dst.Type(),
+					"invalid copy method signature, unknown arg type: %s[%d] for function %s with dst %s",
+					argTyp, i, method.Type, dst.Type(),
 				))
 			}
 		}
 
-		if !dstUsed {
+		if dstIndex == -1 {
 			panic(fmt.Sprintf(
 				"invalid copy method signature, dst is required for copy method %s.%s",
 				src.Type(), method.Func,
