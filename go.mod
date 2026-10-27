@@ -9,4 +9,7 @@ require (
 	golang.org/x/exp v0.0.0-20260824195058-e88cd73687aa
 )
 
-require github.com/pkg/errors v0.9.1 // indirect
+require (
+	github.com/go4org/hashtriemap v0.0.0-20260925222741-44e5305f85d9 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+)

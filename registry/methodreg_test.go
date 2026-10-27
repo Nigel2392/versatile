@@ -218,7 +218,8 @@ skipVanillaReflect:
 				b.ReportAllocs()
 				reg := NewMethods(0)
 				for b.Loop() {
-					clear(reg.tCache)
+					reg.CoolDown()
+
 					_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 				}
 			})
@@ -257,7 +258,8 @@ skipVanillaReflect:
 					s[i] = fmt.Sprintf("Method%d", i)
 				}
 				for b.Loop() {
-					clear(reg.tCache)
+					reg.CoolDown()
+
 					_, _, _ = reg.For(tc.rv, s, noopValidator)
 				}
 			})

@@ -1,3 +1,6 @@
+//go:build !asyncmethods
+// +build !asyncmethods
+
 package registry
 
 import (
@@ -32,6 +35,13 @@ func NewMethods(initSize int) *MethodsRegistry {
 	})
 }
 
+// Clears the cache and returns the total count of cleared items
+func (m *MethodsRegistry) CoolDown() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clear(m.tCache)
+}
+
 // Look for multiple methods for this type, cache the first one found for future uses.
 //
 // This cache cannot store multiple methods per type, and will always yield the cached result.
@@ -45,12 +55,14 @@ func (m *MethodsRegistry) For(rv reflect.Value, methodNames []string, validChk .
 	)
 
 	m.mu.RLock()
+
 	for _, name := range methodNames {
 		key.name = name
 		sm, ok := m.tCache[key]
 
 		// method is cached and valid
 		if ok && sm.method != nil {
+			m.mu.RUnlock()
 
 			// deref until rv is acceptable as receiver value
 			for range sm.derefs {
@@ -58,7 +70,6 @@ func (m *MethodsRegistry) For(rv reflect.Value, methodNames []string, validChk .
 			}
 
 			// explicitly unlock the mutex before returning
-			m.mu.RUnlock()
 			return rv, sm.method, nil
 		}
 
@@ -74,15 +85,30 @@ func (m *MethodsRegistry) For(rv reflect.Value, methodNames []string, validChk .
 
 	m.mu.RUnlock()
 
+	return m.findMethodsFor(rv, rt, notFound, validChk...)
+}
+
+func (m *MethodsRegistry) findMethodsFor(rv reflect.Value, rt reflect.Type, methodNames []string, validChk ...func(reflect.Value, *reflect.Method) error) (rec reflect.Value, rm *reflect.Method, err error) {
+
+	// reuse key across loop iterations
+	var key = methodKey{rtype: rt}
+
 findLoop:
-	for _, method := range notFound {
-		// count derefs required to make rv acceptable as receiver value
-		var derefs int
+	for _, method := range methodNames {
+		var (
+			// count derefs required to make rv acceptable as receiver value
+			derefs int
+
+			// shadow the variables so they get reset on next loop
+			rt = rt
+			rv = rv
+		)
+
+		key.name = method
 
 		// goto reCheck occurs when the method wasn't found on the current type
 		// AND the current type has a pointer reflect kind.
 	reCheck:
-		key.name = method
 		rMethod, ok := rt.MethodByName(method)
 		switch {
 		case !ok && rt.Kind() == reflect.Pointer:
@@ -128,15 +154,18 @@ findLoop:
 			}
 		}
 
+		sm := storedMethod{
+			derefs: derefs,
+			method: rm,
+		}
+
 		// racy again.
 		//
 		// see above statement.
 		m.mu.Lock()
-		m.tCache[key] = storedMethod{
-			derefs: derefs,
-			method: rm,
-		}
+		m.tCache[key] = sm
 		m.mu.Unlock()
+
 		return rv, rm, nil
 	}
 
