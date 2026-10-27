@@ -109,7 +109,7 @@ func TestMethodRegistry(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(fmt.Sprintf("%s_Total_%d", tc.name, tc.rv.Type().NumMethod()), func(t *testing.T) {
 				reg := NewMethods(0)
-				method, err := reg.For(tc.rv, tc.methodNames, noopValidator)
+				_, method, err := reg.For(tc.rv, tc.methodNames, noopValidator)
 				if err != nil {
 					if errors.Is(err, ErrNotFound) && tc.rv.Type().NumMethod() == 0 {
 						goto containsCheck
@@ -136,7 +136,7 @@ func TestMethodRegistry(t *testing.T) {
 					s[i] = fmt.Sprintf("Method%d", i)
 				}
 
-				_, err := reg.For(tc.rv, s, noopValidator)
+				_, _, err := reg.For(tc.rv, s, noopValidator)
 				if !errors.Is(err, ErrNotFound) {
 					t.Fatalf("err should be %s, got %s", ErrNotFound, err)
 				}
@@ -198,14 +198,14 @@ skipVanillaReflect:
 	b.Run("WarmCache", func(b *testing.B) {
 		reg := NewMethods(0)
 		for _, tc := range cases {
-			_, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
+			_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 		}
 
 		for _, tc := range cases {
 			b.Run(fmt.Sprintf("%s_Total_%d", tc.name, tc.rv.Type().NumMethod()), func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
-					_, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
+					_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 				}
 			})
 		}
@@ -219,7 +219,7 @@ skipVanillaReflect:
 				reg := NewMethods(0)
 				for b.Loop() {
 					clear(reg.tCache)
-					_, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
+					_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 				}
 			})
 		}
@@ -230,7 +230,7 @@ skipVanillaReflect:
 		for _, tc := range cases {
 			reg := NewMethods(0)
 			for _, tc := range cases {
-				_, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
+				_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 			}
 
 			s := make([]string, 3)
@@ -241,7 +241,7 @@ skipVanillaReflect:
 			b.Run(fmt.Sprintf("%s_Total_%d", tc.name, tc.rv.Type().NumMethod()), func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
-					_, _ = reg.For(tc.rv, s, noopValidator)
+					_, _, _ = reg.For(tc.rv, s, noopValidator)
 				}
 			})
 		}
@@ -258,7 +258,7 @@ skipVanillaReflect:
 				}
 				for b.Loop() {
 					clear(reg.tCache)
-					_, _ = reg.For(tc.rv, s, noopValidator)
+					_, _, _ = reg.For(tc.rv, s, noopValidator)
 				}
 			})
 		}
@@ -268,7 +268,7 @@ skipVanillaReflect:
 	b.Run("ParallelWarmCache", func(b *testing.B) {
 		reg := NewMethods(0)
 		for _, tc := range cases {
-			_, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
+			_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 		}
 
 		b.ReportAllocs()
@@ -276,7 +276,7 @@ skipVanillaReflect:
 			i := 0
 			for pb.Next() {
 				tc := cases[i%len(cases)]
-				_, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
+				_, _, _ = reg.For(tc.rv, tc.methodNames, noopValidator)
 				i++
 			}
 		})

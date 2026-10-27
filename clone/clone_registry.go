@@ -125,7 +125,7 @@ func (r *stepRegistry) Step(dst reflect.Type, src reflect.Type) (step Step, ok b
 	return r._steps.Get(dst, src)
 }
 
-func (r *stepRegistry) MethodFor(val reflect.Value, names []string, valid ...func(reflect.Value, *reflect.Method) error) (*reflect.Method, error) {
+func (r *stepRegistry) MethodFor(val reflect.Value, names []string, valid ...func(reflect.Value, *reflect.Method) error) (reflect.Value, *reflect.Method, error) {
 	return r._methods.For(val, names, valid...)
 }
 

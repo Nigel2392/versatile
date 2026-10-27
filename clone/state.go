@@ -324,7 +324,7 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 	}
 
 	if !s.Flags.Is(CF_NO_COPY_METHODS) {
-		method, err := stepReg.MethodFor(src, _methodCCpyMethods, _checkCCpyMethod)
+		arg0, method, err := stepReg.MethodFor(src, _methodCCpyMethods, _checkCCpyMethod)
 		if err != nil {
 			if errors.Is(err, registry.ErrNotFound) {
 				// no custom copy method on src
@@ -336,16 +336,29 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 		}
 
 		var (
+			dptr         int
 			start        = 1
 			dstUsed      = false
 			curCallerTyp = reflect.TypeOf(caller)
 			numIn        = method.Type.NumIn()
 			argList      = make([]reflect.Value, numIn)
-			dst          = dst.Elem()
 			dstTyp       = dst.Type()
 		)
 
-		argList[0] = src
+		for dstTyp.Kind() == reflect.Pointer {
+			dstTyp = dstTyp.Elem()
+			dptr++
+		}
+
+		if dptr > 1 {
+			for range dptr - 1 {
+				dst = dst.Elem()
+			}
+
+			dstTyp = dst.Type()
+		}
+
+		argList[0] = arg0
 
 		// add context argument if requested
 		if numIn > 1 {
