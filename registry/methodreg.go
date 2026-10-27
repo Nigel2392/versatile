@@ -59,7 +59,7 @@ func (m *MethodsRegistry) For(rv reflect.Value, methodNames []string, validChk .
 
 			// explicitly unlock the mutex before returning
 			m.mu.RUnlock()
-			return rv, rm, nil
+			return rv, sm.method, nil
 		}
 
 		// method is not cached, append and store name
