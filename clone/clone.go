@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/Nigel2392/versatile"
-	"github.com/Nigel2392/versatile/bitcheck"
 	"github.com/Nigel2392/versatile/internal/danger"
 	"github.com/Nigel2392/versatile/registry"
 )
@@ -94,19 +93,25 @@ func _getterExactType(dst reflect.Type, src reflect.Type) []registry.Getter[Step
 
 func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []func(*State)) (err error) {
 
-	var state *State
-	var _state, ok = StateFromContext(ctx)
+	sCtx, ok := ctx.Value(contextKey{}).(*stateContext)
 	if !ok {
-		_state = new(State{
-			pointers: make(map[oldPtr]newPtr),
-		})
+		sCtx = &stateContext{
+			Context: ctx,
+			state: &State{
+				pointers: make(map[oldPtr]newPtr),
+			},
+		}
 	} else {
-		s := *_state
-		_state = &s
+		s := *sCtx.state
+		sCtx = &stateContext{
+			Context: ctx,
+			state:   &s,
+		}
 	}
 
 	// prevents extra alloc (prevent state escapes to heap)
-	state = (*State)(danger.Noescape(unsafe.Pointer(_state)))
+	state := (*State)(danger.Noescape(unsafe.Pointer(sCtx.state)))
+	ctx = (*stateContext)(danger.Noescape(unsafe.Pointer(sCtx)))
 
 	// apply customisations to state
 	for _, opt := range opts {
@@ -117,15 +122,24 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 		state.cache = &cacheRegistry{_steps: registry.NewTypeRegistry(nil, registry.EXACT_IFACE, _getterExactType)}
 	}
 
-	if !bitcheck.Is(state.Flags, CF_KEEP_POINTERS) {
-		clear(state.pointers)
+	// only clear when context is shared context
+	if state.Flags&cf_shared_state == cf_shared_state {
+		if state.Flags&CF_KEEP_POINTERS != CF_KEEP_POINTERS {
+			clear(state.pointers)
+		}
+
+		// set shared to false, if clone or copy get called from
+		// within the current stack we want to keep the previous
+		// state pointers.
+		state.Flags = state.Flags &^ cf_shared_state
 	}
 
 	// copy to dst
-	err = state._Copy(ctx, dst, src, TopLevelCaller{Val: dst})
+	err = state.RCopy(ctx, dst, src, TopLevelCaller{Val: dst})
 
 	// ensure state lives through all steps
-	runtime.KeepAlive(_state)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(sCtx)
 	return err
 
 }

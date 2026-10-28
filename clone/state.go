@@ -77,6 +77,11 @@ const (
 	CF_ONLY_PUB_FLDS                         // only public (non exported) struct fields can be cloned.
 	CF_NO_CONVS                              // don't allow conversions from, int32 to int64 (singular example)
 	CF_NO_COPY_METHODS                       // do not allow for methods on src or dst to be used to copy src to dst
+
+	// indicates the current state is shared
+	// do not clear the cache if the state is not shared
+	// this flag will be unset when clone or copy is called.
+	cf_shared_state
 )
 
 type State struct {
@@ -323,6 +328,10 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 		return err
 	}
 
+	return s.stepCopy(ctx, step, dst, src, caller)
+}
+
+func (s *State) stepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) (err error) {
 	if !s.Flags.Is(CF_NO_COPY_METHODS) {
 		arg0, method, err := stepReg.MethodFor(src, _methodCCpyMethods, _checkCCpyMethod)
 		if err != nil {
@@ -441,7 +450,20 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 	}
 
 baseCpy:
-	return s.copy(ctx, step, dst, src, caller)
+	switch c := step.(type) {
+	case CallerStep[CALLER]:
+		// wont allocate on heap by default
+		err = c.CopyWithCaller(ctx, s, dst, src, caller)
+	case CallerStep[Caller]:
+		// will allocate on heap (interface boxing)
+		err = c.CopyWithCaller(ctx, s, dst, src, caller)
+	default:
+		err = step.Copy(ctx, s, dst, src)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // [State.Copy] is to be used inside of the [Copy] function stack
@@ -460,17 +482,60 @@ func (s *State) Copy[DST, SRC any, CALLER Caller](ctx context.Context, dst DST, 
 		return nil
 	}
 
-	return s._Copy(ctx, rvDst, rvSrc, caller)
+	return s.RCopy(ctx, rvDst, rvSrc, caller)
 }
 
 // [State.Copy] is to be used inside of the [Copy] function stack
-func (s *State) _Copy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.Value, caller CALLER) (err error) {
+func (s *State) RCopy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.Value, caller CALLER) (err error) {
 
 	var (
 		step   Step
-		srcTyp = rvSrc.Type()
-		dstTyp = rvDst.Type()
+		srcTyp reflect.Type
+		dstTyp reflect.Type
 	)
+
+	rvDst, dstTyp, rvSrc, srcTyp = dereference(rvDst, rvSrc)
+
+	// retrieve copy steps
+	step, err = s.StepInit(ctx, dstTyp, srcTyp)
+	if err != nil {
+		return errors.Wrapf(
+			err, "%s => %s",
+			srcTyp, dstTyp,
+		)
+	}
+
+	// copy to dst
+	return s.stepCopy(ctx, step, rvDst, rvSrc, caller)
+}
+
+func (s *State) validate(ctx context.Context, dst, src reflect.Value) error {
+	if bitcheck.Is(s.Flags, CF_NOVALIDATE) {
+		return nil
+	}
+
+	if dst.Kind() != reflect.Pointer && !dst.CanSet() {
+		if dst.CanInterface() {
+			dstf := dst.Interface()
+			return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
+		}
+		if !dst.IsValid() {
+			return ErrInvalid.Wrapf("dst is invalid, cannot copy src %v", src.Interface())
+		}
+	}
+
+	if !OK.Value(ctx, src) {
+		return ErrInvalid.Wrapf(
+			"%s is specified as non-clonable", src.Type(),
+		)
+	}
+
+	return nil
+}
+
+func dereference(rvDst, rvSrc reflect.Value) (dst reflect.Value, dstTyp reflect.Type, src reflect.Value, srcTyp reflect.Type) {
+	srcTyp = rvSrc.Type()
+	dstTyp = rvDst.Type()
 
 	if dstTyp.Kind() == reflect.Pointer {
 
@@ -513,59 +578,5 @@ func (s *State) _Copy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.V
 		dstTyp = rvDst.Type().Elem()
 	}
 
-	// retrieve copy steps
-	step, err = s.StepInit(ctx, dstTyp, srcTyp)
-	if err != nil {
-		return errors.Wrapf(
-			err, "%s => %s",
-			srcTyp, dstTyp,
-		)
-	}
-
-	// copy to dst
-	return s.StepCopy(ctx, step, rvDst, rvSrc, caller)
-}
-
-func (s *State) validate(ctx context.Context, dst, src reflect.Value) error {
-	if bitcheck.Is(s.Flags, CF_NOVALIDATE) {
-		return nil
-	}
-
-	if dst.Kind() != reflect.Pointer && !dst.CanSet() {
-		if dst.CanInterface() {
-			dstf := dst.Interface()
-			return ErrInvalid.Wrapf("dst %T(%v) is not settable, cannot copy src %v", dstf, dstf, src.Interface())
-		}
-		if !dst.IsValid() {
-			return ErrInvalid.Wrapf("dst is invalid, cannot copy src %v", src.Interface())
-		}
-	}
-
-	if !OK.Value(ctx, src) {
-		return ErrInvalid.Wrapf(
-			"%s is specified as non-clonable", src.Type(),
-		)
-	}
-
-	return nil
-}
-
-func (s *State) copy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) (err error) {
-	switch c := step.(type) {
-	case CallerStep[CALLER]:
-		// wont allocate on heap by default
-		err = c.CopyWithCaller(ctx, s, dst, src, caller)
-	case CallerStep[Caller]:
-		// will allocate on heap (interface boxing)
-		err = c.CopyWithCaller(ctx, s, dst, src, caller)
-	default:
-		err = step.Copy(ctx, s, dst, src)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-
+	return rvDst, dstTyp, rvSrc, srcTyp
 }
