@@ -48,6 +48,12 @@ type MapCaller struct {
 	Key reflect.Value
 }
 
+type StateCopyCaller[DST, SRC, FROM any] struct {
+	Dst  DST
+	Src  SRC
+	From FROM
+}
+
 func (t SliceCaller) Value() reflect.Value {
 	return t.Val
 }
