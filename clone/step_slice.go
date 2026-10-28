@@ -26,7 +26,7 @@ func (f SliceStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (s
 		err = errors.Wrap(err, "SliceStep.Init")
 	}
 
-	s.Cache().AddStepType(dst, src, f)
+	s.Cache().Add(dst, src, f)
 	return f, err
 }
 

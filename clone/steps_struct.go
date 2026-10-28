@@ -27,7 +27,7 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 		dstStrct = dst
 	}
 
-	s.Cache().AddStepType(dst, src, Step(&f)) // cache reference to [StructStep]
+	s.Cache().Add(dst, src, Step(&f)) // cache reference to [StructStep]
 
 	f.steps = make([]structFieldStep, 0, src.NumField())
 	for sf := range StructFieldsForClone(s, src) {

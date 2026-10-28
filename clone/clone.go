@@ -52,16 +52,17 @@ func CopyT[TYP any, PTR any](ctx context.Context, dst *PTR, src TYP, opts ...fun
 func Clone[T any](ctx context.Context, src any, opts ...func(*State)) (val T, err error) {
 	var (
 		rvSrc = versatile.ReflectValue(src)
-		rvDst = reflect.New(rvSrc.Type())
+		rvDst = new(T)
 	)
 
 	if rvSrc.Kind() == reflect.Invalid {
 		return val, ErrInvalid.Wrap("src is invalid")
 	}
 
-	err = rcopy(ctx, rvDst, rvSrc, opts)
+	_rvDst := (*T)(danger.Noescape(unsafe.Pointer(rvDst)))
+	err = rcopy(ctx, reflect.ValueOf(_rvDst), rvSrc, opts)
 
-	return rvDst.Elem().Interface().(T), nil
+	return *rvDst, nil
 }
 
 // Copy value src into pointer dst
@@ -119,7 +120,7 @@ func rcopy(ctx context.Context, dst reflect.Value, src reflect.Value, opts []fun
 	}
 
 	if state.cache == nil && !state.Flags.Is(CF_NO_CACHE) {
-		state.cache = &cacheRegistry{_steps: registry.NewTypeRegistry(nil, registry.EXACT_IFACE, _getterExactType)}
+		state.cache = &cacheRegistry{cache: make(map[registry.RegKey[reflect.Type]]Step)}
 	}
 
 	// only clear when context is shared context

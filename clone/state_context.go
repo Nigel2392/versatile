@@ -2,6 +2,7 @@ package clone
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/Nigel2392/versatile/registry"
 )
@@ -44,7 +45,7 @@ func SharedStateContext(ctx context.Context, opts ...func(s *State)) context.Con
 	sCtx.state.Flags |= cf_shared_state
 
 	if sCtx.state.cache == nil && !sCtx.state.Flags.Is(CF_NO_CACHE) {
-		sCtx.state.cache = &cacheRegistry{_steps: registry.NewTypeRegistry(nil, registry.EXACT_IFACE, _getterExactType)}
+		sCtx.state.cache = &cacheRegistry{cache: make(map[registry.RegKey[reflect.Type]]Step)}
 	}
 
 	return sCtx

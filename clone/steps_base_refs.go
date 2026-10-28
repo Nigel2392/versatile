@@ -29,7 +29,7 @@ func (f PointerStep) Init(ctx context.Context, s *State, dst, src reflect.Type) 
 		return f, errors.Wrap(err, "PointerStep.Init")
 	}
 
-	s.Cache().AddStepType(dst, src, f)
+	s.Cache().Add(dst, src, f)
 	return f, nil
 }
 
@@ -44,7 +44,7 @@ func NewDstForSrc(s *State, dst, src reflect.Value) (newPtr reflect.Value, zero,
 
 	if src.Kind() == reflect.Pointer && src.IsNil() {
 		if develop.DEV {
-			develop.Logf("src is nil, setting dst to zero of %s", src.Type())
+			develop.Logf(context.Background(), "src is nil, setting dst to zero of %s", src.Type())
 		}
 
 		dst.Set(reflect.Zero(src.Type()))
@@ -83,7 +83,7 @@ func NewDstForSrc(s *State, dst, src reflect.Value) (newPtr reflect.Value, zero,
 				))
 			} else {
 				develop.Logf(
-					"NewDstValue(\n\tdst: %s\n\tsrc: %s\n\tallocTyp: %s\n\tnewPtrTyp: %s\n)",
+					context.Background(), "NewDstValue(\n\tdst: %s\n\tsrc: %s\n\tallocTyp: %s\n\tnewPtrTyp: %s\n)",
 					dst.Type(), src.Type(), allocTyp, newPtrStr,
 				)
 			}
@@ -128,7 +128,7 @@ func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type
 		return f, nil
 	}
 
-	if step, ok := s.Cache().Step(cDst, cSrc); ok {
+	if step, ok := s.Cache().Step(dst, src); ok {
 		return step, nil
 	}
 
@@ -137,7 +137,7 @@ func (f InterfaceStep) Init(ctx context.Context, s *State, dst, src reflect.Type
 		return f, errors.Wrap(err, "InterfaceStep.Init")
 	}
 
-	s.Cache().AddStepType(cDst, cSrc, f)
+	s.Cache().Add(dst, src, f)
 	return f, nil
 }
 

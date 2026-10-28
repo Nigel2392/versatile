@@ -37,8 +37,9 @@ type Registry interface {
 	Step(dst reflect.Type, src reflect.Type) (Step, bool)
 }
 
-type ResettableRegistry interface {
-	Registry
+type CacheRegistry interface {
+	Add(dstTyp, srcTyp reflect.Type, step Step)
+	Step(dst reflect.Type, src reflect.Type) (Step, bool)
 	Reset() int
 }
 
@@ -131,7 +132,7 @@ func (r *stepRegistry) MethodFor(val reflect.Value, names []string, valid ...fun
 
 type cacheRegistry struct {
 	disabled bool
-	stepRegistry
+	cache    map[registry.RegKey[reflect.Type]]Step
 }
 
 func (r *cacheRegistry) SetDisabled(b bool) (old bool) {
@@ -141,21 +142,17 @@ func (r *cacheRegistry) SetDisabled(b bool) (old bool) {
 }
 
 func (r cacheRegistry) Reset() int {
-	return r._steps.Clear()
+	l := len(r.cache)
+	clear(r.cache)
+	return l
 }
 
-func (r *cacheRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, src ...any) {
+func (r *cacheRegistry) Add(dstTyp, srcTyp reflect.Type, step Step) {
 	if r.disabled {
 		return
 	}
-	r.stepRegistry.AddStepType(dstIfSrcElseSrc, src...)
-}
 
-func (r *cacheRegistry) AddStepKind(dstIfSrcElseSrc reflect.Kind, src ...any) {
-	if r.disabled {
-		return
-	}
-	r.stepRegistry.AddStepKind(dstIfSrcElseSrc, src...)
+	r.cache[registry.RegKey[reflect.Type]{Dst: dstTyp, Src: srcTyp}] = step
 }
 
 func (r *cacheRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
@@ -163,14 +160,14 @@ func (r *cacheRegistry) Step(dst reflect.Type, src reflect.Type) (Step, bool) {
 		return nil, false
 	}
 
-	return r.stepRegistry.Step(dst, src)
+	step, ok := r.cache[registry.RegKey[reflect.Type]{Dst: dst, Src: src}]
+	return step, ok
 }
 
-var NopRegistry ResettableRegistry = nopRegistry{}
+var NopRegistry CacheRegistry = nopRegistry{}
 
 type nopRegistry struct{}
 
-func (r nopRegistry) AddStepType(dstIfSrcElseSrc reflect.Type, src ...any)      {}
-func (r nopRegistry) AddStepKind(dstIfSrcElseSrc reflect.Kind, src ...any)      {}
+func (r nopRegistry) Add(reflect.Type, reflect.Type, Step)                      {}
 func (r nopRegistry) Step(dst reflect.Type, src reflect.Type) (s Step, ok bool) { return }
 func (r nopRegistry) Reset() (i int)                                            { return }

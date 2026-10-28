@@ -99,7 +99,7 @@ type State struct {
 
 	wrapStep func(*State, Step) Step
 	pointers map[oldPtr]newPtr
-	cache    ResettableRegistry
+	cache    *cacheRegistry
 }
 
 // Allow for enabling and disabling certain features
@@ -246,7 +246,7 @@ func (s *State) MakeMap(oldPtr reflect.Value, dstVal reflect.Value, newTyp refle
 	return n, false
 }
 
-func (s *State) Cache() ResettableRegistry {
+func (s *State) Cache() CacheRegistry {
 	if s.cache == nil {
 		return NopRegistry
 	}
@@ -342,6 +342,12 @@ func (s *State) StepCopy[CALLER Caller](ctx context.Context, step Step, dst, src
 }
 
 func (s *State) stepCopy[CALLER Caller](ctx context.Context, step Step, dst, src reflect.Value, caller CALLER) (err error) {
+
+	if develop.DEV {
+		develop.Logf(ctx, "%T %s => %s", step, src.Type(), dst.Type())
+		ctx = develop.AddLogIndent(ctx, 1)
+	}
+
 	if !s.Flags.Is(CF_NO_COPY_METHODS) {
 		arg0, method, err := stepReg.MethodFor(src, _methodCCpyMethods, _checkCCpyMethod)
 		if err != nil {
@@ -513,6 +519,10 @@ func (s *State) RCopy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.V
 			err, "%s => %s",
 			srcTyp, dstTyp,
 		)
+	}
+
+	if develop.DEV {
+		develop.Logf(ctx, "%T: %s into %s / %s into %s", step, srcTyp, dstTyp, rvSrc.Type(), rvDst.Type())
 	}
 
 	// copy to dst

@@ -246,7 +246,7 @@ func TestSteps(t *testing.T) {
 		}
 
 		if *i != s {
-			t.Errorf("expected 'i' to be %d, got %d", s, i)
+			t.Errorf("expected 'i' to be %d, got %d", s, *i)
 		} else {
 			t.Logf("i == %d: %d", *i, s)
 		}
@@ -279,7 +279,7 @@ func TestSteps(t *testing.T) {
 			}
 
 			if *i != s {
-				t.Errorf("expected 'i' to be %d, got %d", s, i)
+				t.Errorf("expected 'i' to be %d, got %d", s, *i)
 			} else {
 				t.Logf("i == %d: %d", *i, s)
 			}
@@ -610,6 +610,40 @@ func TestClone(t *testing.T) {
 		)
 
 		err := Copy(t.Context(), &dst, &src)
+		if err != nil {
+			t.Fatalf("error during interface test: %v", err)
+		}
+
+		if dst == nil {
+			t.Fatal("dst is nil")
+		}
+
+		if dst.ID != src.ID || src.ID != 1 {
+			t.Fatalf("dst ID mismatch src ID: %d != %d", dst.ID, src.ID)
+		}
+
+		if dst.Name != src.Name || src.Name != "TestModelFields" {
+			t.Fatalf("dst Name mismatch src Name: %s != %s", dst.Name, src.Name)
+		}
+
+		t.Logf("%+v", dst)
+	})
+
+	t.Run("TypedClone", func(t *testing.T) {
+		var (
+			src = &TestModelFields{
+				ID:   1,
+				Name: "TestModelFields",
+				Objects: []int64{
+					1, 2, 3, 4, 5, 6,
+				},
+			}
+		)
+
+		dst, err := Clone[*TestModelFields](
+			t.Context(), src,
+			Flag(CF_NOVALIDATE),
+		)
 		if err != nil {
 			t.Fatalf("error during interface test: %v", err)
 		}
