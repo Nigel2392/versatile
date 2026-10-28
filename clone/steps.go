@@ -33,6 +33,8 @@ func init() {
 	AddStepKind(reflect.Bool, BaseStep{})
 	AddStepKind(reflect.String, BaseStep{})
 
+	AddStepKind(reflect.Func, BaseStep{})
+
 	AddStepKind(reflect.Pointer, PointerStep{})
 	AddStepKind(reflect.Interface, InterfaceStep{})
 	AddStepKind(reflect.Struct, StructStep{})

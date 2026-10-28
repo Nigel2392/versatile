@@ -46,7 +46,7 @@ func (f StructStep) Init(ctx context.Context, s *State, dst, src reflect.Type) (
 
 		step, err := s.StepInit(ctx, dstSfTyp, sf.Type)
 		if err != nil {
-			return f, errors.Wrapf(err, "StructStep.Init(%v)", sf.Index)
+			return f, errors.Wrapf(err, "StructStep.Init(%s%v/%s)", src, sf.Index, sf.Name)
 		}
 
 		f.steps = append(f.steps, structFieldStep{
@@ -75,7 +75,7 @@ func (f StructStep) Copy(ctx context.Context, s *State, dst, src reflect.Value) 
 		srcFldVal := reflect.NewAt(srcFld.Type(), unsafe.Pointer(srcFld.UnsafeAddr())).Elem()
 
 		if err := s.StepCopy(ctx, fld.step, addrDst, srcFldVal, StructCaller{dstElem, fld.idx}); err != nil {
-			return errors.Wrapf(err, "StructStep.Copy(%v)", fld.idx)
+			return errors.Wrapf(err, "StructStep.Copy(%s%v)", src.Type(), fld.idx)
 		}
 	}
 

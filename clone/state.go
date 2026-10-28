@@ -516,8 +516,8 @@ func (s *State) RCopy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.V
 	step, err = s.StepInit(ctx, dstTyp, srcTyp)
 	if err != nil {
 		return errors.Wrapf(
-			err, "%s => %s",
-			srcTyp, dstTyp,
+			err, "(%s) %s => %s",
+			caller, srcTyp, dstTyp,
 		)
 	}
 
