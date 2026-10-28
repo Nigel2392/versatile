@@ -54,6 +54,25 @@ type StateCopyCaller[DST, SRC, FROM any] struct {
 	From FROM
 }
 
+func (s SliceCaller) String() string {
+	return fmt.Sprintf("%s[%v]", s.Val.Type(), s.Index)
+}
+func (s ReferenceCaller) String() string {
+	return fmt.Sprintf("%s", s.Ref.Type())
+}
+func (s TopLevelCaller) String() string {
+	return fmt.Sprintf("Root(%s)", s.Val.Type())
+}
+func (s StructCaller) String() string {
+	return fmt.Sprintf("%s[%v]", s.Val.Type(), s.Field)
+}
+func (s MapCaller) String() string {
+	return fmt.Sprintf("%s[%s]{%v: %v}", s.Key.Type(), s.Val.Type(), s.Key.String(), s.Val.String())
+}
+func (s StateCopyCaller[D, S, F]) String() string {
+	return fmt.Sprintf("%T(%T, %T)", s.From, s.Dst, s.Src)
+}
+
 func (t SliceCaller) Value() reflect.Value {
 	return t.Val
 }
@@ -516,7 +535,7 @@ func (s *State) RCopy[CALLER Caller](ctx context.Context, rvDst, rvSrc reflect.V
 	step, err = s.StepInit(ctx, dstTyp, srcTyp)
 	if err != nil {
 		return errors.Wrapf(
-			err, "(%s) %s => %s",
+			err, "(%v) %s => %s",
 			caller, srcTyp, dstTyp,
 		)
 	}
