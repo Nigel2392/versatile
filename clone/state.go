@@ -74,6 +74,10 @@ func (t MapCaller) Value() reflect.Value {
 	return t.Val
 }
 
+func (t StateCopyCaller[T1, T2, T3]) Value() reflect.Value {
+	return reflect.ValueOf(t.Dst)
+}
+
 const (
 	CF_INVALID         CloneFlag = iota
 	CF_NOWRAP          CloneFlag = 1 << iota // don't allow wrapping, even if a wrap function is provided
