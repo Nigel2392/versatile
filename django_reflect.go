@@ -103,6 +103,9 @@ func IsZero(value interface{}) bool {
 				return false
 			}
 		}
+
+		return true
+
 	case re.Map:
 		return rv.Len() == 0
 	}
