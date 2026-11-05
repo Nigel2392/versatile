@@ -1,6 +1,7 @@
 package versatile
 
 import (
+	"reflect"
 	re "reflect"
 
 	"github.com/Nigel2392/versatile/internal/danger"
@@ -46,7 +47,7 @@ func ReflectValue(value interface{}) re.Value {
 	}
 }
 
-func IsZero(value interface{}) bool {
+func IsZero(value interface{}, isZero ...func(reflect.Value) (isZero, ok bool)) bool {
 	if value == nil {
 		return true
 	}
@@ -103,11 +104,15 @@ func IsZero(value interface{}) bool {
 				return false
 			}
 		}
-
-		return true
-
 	case re.Map:
 		return rv.Len() == 0
+	}
+
+	for _, fn := range isZero {
+		zero, ok := fn(rv)
+		if ok || zero {
+			return zero
+		}
 	}
 
 	return re.DeepEqual(rv.Interface(), re.Zero(rv.Type()).Interface())
